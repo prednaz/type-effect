@@ -26,7 +26,7 @@ run name = do
   putStrLn "Expression:"
   print p
   putStrLn "Type:"
-  print $ typeOf p
+  print $ cfaW' p
 
 -- |Parse and label program
 parse :: String -> IO Expr
