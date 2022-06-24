@@ -26,9 +26,10 @@ run name = do
   putStrLn "Expression:"
   print p
   putStrLn "Type:"
-  print $ cfaW' p
+  putStrLn $ pretty $ typeOf p
 
 -- |Parse and label program
+
 parse :: String -> IO Expr
 parse programName = do
   let fileName = "./examples/" ++ programName ++ ".fun"
