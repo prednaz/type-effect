@@ -99,15 +99,16 @@ cfaInstantiate (Forall v ts) = do
 
 freeVars :: Ty a -> Set TyVar
 freeVars (FreeVar v) = S.singleton v
-freeVars (TArrow t1 _ t2) = freeVars t1 `S.union` freeVars t2
+freeVars (TArrow t1 _ t2) = freeVars t1 <> freeVars t2
+freeVars (TPair _ t1 t2) = freeVars t1 <> freeVars t2
 freeVars _ = mempty
 
 schemeFreeVars :: TyScheme a -> Set TyVar
-schemeFreeVars (SType _)     = mempty
+schemeFreeVars (SType t)     = freeVars t
 schemeFreeVars (Forall t ts) = S.insert t $ schemeFreeVars ts
 
 envFreeVars :: TyEnv -> Set TyVar
-envFreeVars = M.foldr (\x y -> schemeFreeVars x `S.union` y) mempty
+envFreeVars = M.foldr (\x y -> schemeFreeVars x <> y) mempty
 
 generalise :: TyEnv -> Ty a -> TyScheme a
 generalise e t = S.foldr Forall (SType t) (freeVars t `S.difference` envFreeVars e)
@@ -176,6 +177,9 @@ subeffect (TArrow t1 a t2) = do
 subeffect t = return (t, mempty)
 -}
 
+tracePrint :: (Show a, Monad m) => a -> m ()
+tracePrint x = traceShow x $ return () 
+
 cfaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, TySubst, Constrs)
 cfaW e (Integer n) = pure (TInt, mempty, mempty)
 cfaW e (Bool b) =    pure (TBool, mempty, mempty)
@@ -186,7 +190,7 @@ cfaW e (Fn pi x t) = do
   a1 <- freshVar
   (tau, th, c) <- cfaW (M.insert x (SType a1) e) t
   b <- freshAnnVar
-  return (TArrow (substTyVar th a1) b tau, th, c `S.union` S.singleton (Super b (S.singleton $ FunId pi)))
+  return (TArrow (substTyVar th a1) b tau, th, c <> S.singleton (Super b (S.singleton $ FunId pi)))
 cfaW e (Fun pi f x t) = do
   a1 <- freshVar
   a2 <- freshVar
@@ -195,7 +199,7 @@ cfaW e (Fun pi f x t) = do
   (tau, th1, c1) <- cfaW e' t
   (th2, c2) <- unify tau (substTyVar th1 a2)
   let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyVar th2 tau)
-  let c3 = S.map (substTyAnnC th2) (S.unions [c1, c2]) `S.union` S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi))
+  let c3 = S.map (substTyAnnC th2) (S.unions [c1, c2]) <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi))
   let th = composeSubst th2 th1
   return (tau', th, substTyAnns th c3)
 cfaW e (App t1 t2)  = do
@@ -205,14 +209,14 @@ cfaW e (App t1 t2)  = do
   b <- freshAnnVar
   let th3 = unify' (substTyVar th2 tau1) (TArrow tau2 b a)
   let th = composeSubsts [th3, th2, th1]
-  return (substTyVar th3 a, th, substTyAnns th $ c1 `S.union` c2)
+  return (substTyVar th3 a, th, substTyAnns th $ c1 <> c2)
 cfaW e (Let x t1 t2) = do
   (tau1, th1, c1) <- cfaW e t1
   let e' = substEnv th1 e
   let e1 = M.insert x (generalise e' tau1) e'
   (tau, th2, c2) <- cfaW e1 t2
   let th = composeSubst th2 th1
-  return (tau, th, substTyAnns th $ c1 `S.union` c2)
+  return (tau, th, substTyAnns th $ c1 <> c2)
 cfaW e (ITE t1 t2 t3) = do
   (tau1, th1, c1) <- cfaW e t1
   let e1 = substEnv th1 e
@@ -232,13 +236,10 @@ cfaW e (Oper op t1 t2) = do
   return (TInt, th, substTyAnns th $ S.unions [c1, c2, c3, c4])
 cfaW e (Pair pi t1 t2) = do
   (tau1, th1, c1) <- cfaW e t1
-  traceShow t1 $ return ()
-  traceShow e $ return ()
-  traceShow tau1 $ return ()
   (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
   a <- freshAnnVar
   let th = composeSubst th2 th1
-  return (TPair a (substTyVar th tau1) tau2, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 `S.union` c2)
+  return (TPair a (substTyVar th tau1) tau2, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 <> c2)
 cfaW e (PCase t1 x y t2) = do
   (tau1, th1, c1) <- cfaW e t1
   a1 <- freshVar
