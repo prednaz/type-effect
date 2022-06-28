@@ -21,6 +21,9 @@ data Expr
   | Oper    Op   Expr Expr
   | Pair    Pi   Expr Expr
   | PCase   Expr Name Name Expr
+  | Cons    Pi   Expr Expr
+  | Nil     Pi
+  | LCase   Expr Name Name Expr
   deriving Eq
 
 
