@@ -43,7 +43,7 @@ pExpr = (pFn <|> pFun <|> pITE <|> pLet <|> pPair <|> pPCase <|> pCons <|> pLCas
   pPair   = iI (Pair 0) "Pair" "(" pExpr "," pExpr ")" Ii
   pPCase  = iI PCase "pcase" pExpr "of" "Pair" "(" pIdent "," pIdent ")" "=>" pExpr Ii
   pCons   = iI (Cons 0) "Cons" "(" pExpr "," pExpr ")" Ii
-  pLCase  = iI LCase "lcase" pExpr "of" "Cons" "(" pIdent "," pIdent ")" "=>" pExpr Ii
+  pLCase  = iI LCase "lcase" pExpr "of" "Cons" "(" pIdent "," pIdent ")" "=>" pExpr "or" pExpr Ii
    
   -- chained expressions
   pApp = pChainl_ng (App <$ pSpaces) pAtom

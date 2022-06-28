@@ -57,7 +57,7 @@ instance Show Expr where
         Mul -> 7
         Div -> 7
   showsPrec context (Pair pi e1 e2)   = showParen (context > 0) $
-                                          showString "pair"
+                                          showString "Pair"
                                           . showLabel pi
                                           . showString  " "
                                           . showParen True

@@ -23,7 +23,7 @@ data Expr
   | PCase   Expr Name Name Expr
   | Cons    Pi   Expr Expr
   | Nil     Pi
-  | LCase   Expr Name Name Expr
+  | LCase   Expr Name Name Expr Expr
   deriving Eq
 
 
@@ -34,6 +34,7 @@ bin op x y = Oper r x y where
         "-" -> Sub
         "*" -> Mul
         "/" -> Div
+        _ -> error ("unexpected operator: " <> op)
 
 type LabelM = State Integer
 
