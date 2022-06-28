@@ -1,1 +1,1 @@
-(fn f => (fn g => (fn h => f) (if false then f else g)) (fn a => a)) (fn a => a)
+(fn f => (fn g => (fn h => f) (if false then f else g)) (fn a => a + 1)) (fn a => a + 1)

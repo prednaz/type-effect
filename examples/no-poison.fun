@@ -1,4 +1,4 @@
-let f = fn x => x + 1 in
-let g = fn y => y * 3 in
-let h = fn z => (if false then f else g) in
-f 
+let f = fn a => a + 1 in
+let g = fn a => a + 1 in
+let h = if false then f else g in
+f
