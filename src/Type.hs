@@ -146,21 +146,20 @@ unify (FreeVar a) t = return (chk a t (M.singleton a t, mempty), mempty)
 unify t (FreeVar a) = return (chk a t (M.singleton a t, mempty), mempty)
 unify a b = error ("cannot unify " ++ show a ++ " ~ " ++ show b)
 
-unify' :: Ty AnnVar -> Ty AnnVar -> TySubst
-unify' TInt TInt   = mempty
-unify' TBool TBool = mempty
-unify' (TPair b1 t1 t2) (TPair b2 t3 t4) = composeSubst th2 (composeSubst th1 th0)
-  where
-    th0 = (mempty, M.singleton b1 b2)
-    th1 = unify' (substTyVar th0 t1) (substTyVar th0 t3)
-    th2 = unify' (substTyVar th1 (substTyVar th0 t2)) (substTyVar th1 (substTyVar th0 t4))
-unify' (TArrow t1 b1 t2) (TArrow t3 b2 t4) = composeSubst th2 (composeSubst th1 th0)
-  where
-    th0 = (mempty, M.singleton b1 b2)
-    th1 = unify' (substTyVar th0 t1) (substTyVar th0 t3)
-    th2 = unify' (substTyVar th1 (substTyVar th0 t2)) (substTyVar th1 (substTyVar th0 t4))
-unify' (FreeVar a) t = chk a t (M.singleton a t, mempty)
-unify' t (FreeVar a) = chk a t (M.singleton a t, mempty)
+-- | @unify'@ is like @unify@, but does not unify top level annotation variables 
+unify' :: Ty AnnVar -> Ty AnnVar -> State Integer (TySubst, Constrs)
+unify' TInt TInt   = return mempty
+unify' TBool TBool = return mempty
+unify' (TPair _ t1 t2) (TPair _ t3 t4) = do
+  (th1, c1) <- unify t1 t3
+  (th2, c2) <- unify (substTyVar th1 t2) (substTyVar th1 t4)
+  return (composeSubst th2 th1, S.unions [c1, c2])
+unify' (TArrow t1 _ t2) (TArrow t3 _ t4) = do
+  (th1, c1) <- unify t1 t3
+  (th2, c2) <- unify (substTyVar th1 t2) (substTyVar th1 t4)
+  return (composeSubst th2 th1, S.unions [c1, c2])
+unify' (FreeVar a) t = return (chk a t (M.singleton a t, mempty), mempty)
+unify' t (FreeVar a) = return (chk a t (M.singleton a t, mempty), mempty)
 unify' a b = error ("cannot unify " ++ show a ++ " ~ " ++ show b)
 
 subeffect :: AnnVar -> State Integer (AnnVar, Constrs)
@@ -207,9 +206,9 @@ cfaW e (App t1 t2)  = do
   (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
   a <- freshVar
   b <- freshAnnVar
-  let th3 = unify' (substTyVar th2 tau1) (TArrow tau2 b a)
+  (th3, c3) <- unify' (substTyVar th2 tau1) (TArrow tau2 b a)
   let th = composeSubsts [th3, th2, th1]
-  return (substTyVar th3 a, th, substTyAnns th $ c1 <> c2)
+  return (substTyVar th3 a, th, substTyAnns th $ c1 <> c2 <> c3)
 cfaW e (Let x t1 t2) = do
   (tau1, th1, c1) <- cfaW e t1
   let e' = substEnv th1 e
