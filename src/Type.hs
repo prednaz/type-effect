@@ -164,14 +164,15 @@ subeffect a = do
   b <- freshAnnVar
   return (b, S.singleton (SuperVar b a))
 
+data Variance = Co | Contra
 
-{-
-subeffect :: Ty AnnVar -> State Integer (Ty AnnVar, Constrs)
-subeffect (TArrow t1 a t2) = do
-  b <- freshAnnVar
-  return (TArrow t1 b t2, S.singleton (SuperVar b a))
-subeffect t = return (t, mempty)
--}
+subtype :: Ty AnnVar -> Variance -> State Integer (Ty AnnVar)
+subtype (TArrow t1 a t2) v = do
+  undefined
+subtype (TPair a t1 t2) v = undefined
+subtype x _ = return x
+
+
 
 tracePrint :: (Show a, Monad m) => a -> m ()
 tracePrint x = traceShow x $ return () 
