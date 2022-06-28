@@ -21,7 +21,7 @@ parseExpr = runParser "stdin" pExpr
 
 -- * Parsing the FUN language
 pExpr :: Parser Expr
-pExpr = (pFn <|> pFun <|> pITE <|> pLet) <<|> pBin
+pExpr = (pFn <|> pFun <|> pITE <|> pLet <|> pPair <|> pPCase) <<|> pBin
   where
   
   -- literal expressions
@@ -35,11 +35,13 @@ pExpr = (pFn <|> pFun <|> pITE <|> pLet) <<|> pBin
      <<|> pParens pExpr
   
   -- simple expressions
-  pFn,pFun,pLet,pITE :: Parser Expr
+  pFn,pFun,pLet,pITE, pPair, pPCase :: Parser Expr
   pFn     = iI (Fn 0) "fn" pIdent "=>" pExpr Ii -- Default Pi to 0
   pFun    = iI (Fun 0) "fun" pIdent pIdent "=>" pExpr Ii -- Dito
   pLet    = iI Let "let" pIdent "=" pExpr "in" pExpr Ii
   pITE    = iI ITE "if" pExpr "then" pExpr "else" pExpr Ii
+  pPair   = iI (Pair 0) "pair" "(" pExpr "," pExpr ")" Ii
+  pPCase  = iI PCase "pcase" pExpr "of" "(" pIdent "," pIdent ")" "=>" pExpr Ii
    
   -- chained expressions
   pApp = pChainl_ng (App <$ pSpaces) pAtom

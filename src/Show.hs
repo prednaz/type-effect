@@ -22,25 +22,25 @@ instance Show Expr where
   showsPrec context (Fn pi x e)     = showParen (context > 0) $
                                         showString "fn" . showLabel pi
                                         . showString (" " ++ x ++ " =>\n")
-                                        . indent (showsPrec 0 e)
+                                        . indent (shows e)
   showsPrec context (Fun pi f x e)  = showParen (context > 0) $
                                         showString "fun" . showLabel pi
                                         . showString (" " ++ f ++ " " ++ x ++ " =>\n")
-                                        . indent (showsPrec 0 e)
+                                        . indent (shows e)
   showsPrec context (App e1 e2)     = showParen (context > 10) $
                                         showsPrec 10 e1 . showString " " . showsPrec 11 e2
   showsPrec context (Let x e1 e2)   = showParen (context > 0) $
                                         showString ("let " ++ x ++ " =\n")
-                                        . indent (showsPrec 0 e1)
+                                        . indent (shows e1)
                                         . showString "in\n"
-                                        . indent (showsPrec 0 e2)
+                                        . indent (shows e2)
   showsPrec context (ITE c t f)     = showParen (context > 0) $
                                         showString "if"
-                                        . indent (showsPrec 0 c)
+                                        . indent (shows c)
                                         . showString "then"
-                                        . indent (showsPrec 0 t)
+                                        . indent (shows t)
                                         . showString "else"
-                                        . indent (showsPrec 0 f)
+                                        . indent (shows f)
   showsPrec context (Oper op e1 e2) = showParen (context > prec) $
                                         showsPrec prec e1
                                         . showString " "
@@ -53,6 +53,24 @@ instance Show Expr where
         Sub -> 6
         Mul -> 7
         Div -> 7
+  showsPrec context (Pair pi e1 e2)   = showParen (context > 0) $
+                                          showString "pair"
+                                          . showLabel pi
+                                          . showString  " "
+                                          . showParen True
+                                          (shows e1
+                                          . showString " , "
+                                          . shows e2)
+  showsPrec context (PCase e1 x y e2) = showParen (context > 0) $
+                                          showString "pcase "
+                                          . showsPrec 1 e1
+                                          . showString " of "
+                                          . showParen True (
+                                          showString x
+                                          . showString " , "
+                                          . showString y)
+                                          . showString " => "
+                                          . shows e2
 
 instance Show Op where
   show Add = "+"

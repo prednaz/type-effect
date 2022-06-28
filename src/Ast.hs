@@ -19,6 +19,8 @@ data Expr
   | Let     Name Expr Expr
   | ITE     Expr Expr Expr
   | Oper    Op   Expr Expr
+  | Pair    Pi   Expr Expr
+  | PCase   Expr Name Name Expr
   deriving Eq
 
 
@@ -42,6 +44,8 @@ assignLabels e = evalState (go e) 1
     go (Oper op e1 e2) = Oper op <$> go e1 <*> go e2
     go (Fn _ n e')     = Fn <$> fresh <*> pure n <*> go e'
     go (Fun _ fn n e') = Fun <$> fresh <*> pure fn <*> pure n <*> go e'
+    go (Pair _ e1 e2)  = Pair <$> fresh <*> go e1 <*> go e2
+    go (PCase e1 x y e2) = PCase <$> go e1 <*> pure x <*> pure y <*> go e2
     go x = pure x
 
     fresh :: LabelM Pi

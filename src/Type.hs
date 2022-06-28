@@ -19,7 +19,7 @@ newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId
 data TyVar      = TyVar Name Integer deriving (Eq, Show, Ord)
 newtype AnnVar  = AnnVar Integer deriving (Eq, Ord, Show)
-data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a (Ty a) deriving Show
+data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a (Ty a) | TPair a (Ty a) (Ty a) deriving Show
 data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
 type TyEnv      = Map Name (TyScheme AnnVar)
 type TySubst    = (Map TyVar (Ty AnnVar), Map AnnVar AnnVar)
@@ -45,12 +45,14 @@ replaceTyVar f (FreeVar v) = FreeVar $ f v
 replaceTyVar _ TInt = TInt
 replaceTyVar _ TBool = TBool
 replaceTyVar f (TArrow t1 cs t2) = TArrow (replaceTyVar f t1) cs (replaceTyVar f t2)
+replaceTyVar f (TPair cs t1 t2) = TPair cs (replaceTyVar f t1) (replaceTyVar f t2)
 
 substTyVar :: TySubst -> Ty AnnVar -> Ty AnnVar
 substTyVar s (FreeVar v) = findWithDefault (FreeVar v) v (fst s)
 substTyVar _ TInt = TInt
 substTyVar _ TBool = TBool
 substTyVar s (TArrow t1 a t2) = TArrow (substTyVar s t1) (findWithDefault a a (snd s)) (substTyVar s t2)
+substTyVar s (TPair a t1 t2) = TPair (findWithDefault a a (snd s)) (substTyVar s t1) (substTyVar s t2)
 
 substTyScheme :: TySubst -> TyScheme AnnVar -> TyScheme AnnVar
 substTyScheme s (SType ty)     = SType $ substTyVar s ty
@@ -125,6 +127,13 @@ chk' _ _ s = s
 unify :: Ty AnnVar -> Ty AnnVar -> State Integer (TySubst, Constrs)
 unify TInt TInt   = return mempty
 unify TBool TBool = return mempty
+unify (TPair b1 t1 t2) (TPair b2 t3 t4) = do
+  (a1, c1) <- subeffect b1
+  (a2, c2) <- subeffect b2
+  let th0 = (mempty, M.singleton a1 a2)
+  (th1, c3) <- unify (substTyVar th0 t1) (substTyVar th0 t3)
+  (th2, c4) <- unify (substTyVar th1 (substTyVar th0 t2)) (substTyVar th1 (substTyVar th0 t4))
+  return (composeSubst th2 (composeSubst th1 th0), S.unions [c1, c2, c3, c4])
 unify (TArrow t1 b1 t2) (TArrow t3 b2 t4) = do
   (a1, c1) <- subeffect b1
   (a2, c2) <- subeffect b2
@@ -139,6 +148,11 @@ unify a b = error ("cannot unify " ++ show a ++ " ~ " ++ show b)
 unify' :: Ty AnnVar -> Ty AnnVar -> TySubst
 unify' TInt TInt   = mempty
 unify' TBool TBool = mempty
+unify' (TPair b1 t1 t2) (TPair b2 t3 t4) = composeSubst th2 (composeSubst th1 th0)
+  where
+    th0 = (mempty, M.singleton b1 b2)
+    th1 = unify' (substTyVar th0 t1) (substTyVar th0 t3)
+    th2 = unify' (substTyVar th1 (substTyVar th0 t2)) (substTyVar th1 (substTyVar th0 t4))
 unify' (TArrow t1 b1 t2) (TArrow t3 b2 t4) = composeSubst th2 (composeSubst th1 th0)
   where
     th0 = (mempty, M.singleton b1 b2)
@@ -216,6 +230,28 @@ cfaW e (Oper op t1 t2) = do
   (th4, c4) <- unify (substTyVar th3 tau2) TInt
   let th = composeSubsts [th4, th3, th2, th1]
   return (TInt, th, substTyAnns th $ S.unions [c1, c2, c3, c4])
+cfaW e (Pair pi t1 t2) = do
+  (tau1, th1, c1) <- cfaW e t1
+  traceShow t1 $ return ()
+  traceShow e $ return ()
+  traceShow tau1 $ return ()
+  (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
+  a <- freshAnnVar
+  let th = composeSubst th2 th1
+  return (TPair a (substTyVar th tau1) tau2, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 `S.union` c2)
+cfaW e (PCase t1 x y t2) = do
+  (tau1, th1, c1) <- cfaW e t1
+  a1 <- freshVar
+  a2 <- freshVar
+  b <- freshAnnVar
+  (th2, c2) <- unify (TPair b a1 a2) tau1
+  let th = composeSubst th2 th1
+  let e' = substEnv th e
+  let e1 = M.insert x (generalise e' (substTyVar th a1)) e'
+  let e2 = M.insert y (generalise e1 (substTyVar th a2)) e1
+  (tau2, th3, c3) <- cfaW e2 t2
+  let th' = composeSubst th3 th
+  return (tau2, th', substTyAnns th' $ S.unions [c1, c2, c3])
 
 cfaW' :: Expr -> ((Ty AnnVar, TySubst, Constrs), Integer)
 cfaW' x = flip runState 0 $ cfaW mempty x
@@ -239,6 +275,7 @@ replaceAnnVar f (TArrow t1 a t2) = TArrow (replaceAnnVar f t1) (f a) (replaceAnn
 replaceAnnVar f (FreeVar tv) = FreeVar tv
 replaceAnnVar f TInt = TInt
 replaceAnnVar f TBool = TBool
+replaceAnnVar f (TPair a t1 t2) = TPair (f a) (replaceAnnVar f t1) (replaceAnnVar f t2) 
 
 
 pretty :: Pretty a => a -> String
@@ -267,6 +304,7 @@ instance Pretty (Ty Ann) where
   pretty' b (TArrow t1 a t2) = if b then "(" ++ x ++ ")" else x
     where
       x =  pretty' True t1 ++ " -" ++ pretty' False a ++ "-> " ++ pretty' False t2
+  pretty' b (TPair a t1 t2) = "pair" ++ pretty' False a ++ "(" ++ pretty' False t1 ++ " , " ++ pretty' False t2 ++ ")"
 
 instance Pretty FunId where
   pretty' _ (FunId n) = show n
