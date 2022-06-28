@@ -17,19 +17,16 @@ import Data.List (intercalate)
 
 newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId
-data TyVar      = TyVar Name Integer deriving (Eq, Show, Ord)
 newtype AnnVar  = AnnVar Integer deriving (Eq, Ord, Show)
-data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a (Ty a) | TPair a (Ty a) (Ty a) deriving Show
+data TyVar      = TyVar Name Integer deriving (Eq, Show, Ord)
 data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
+data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a (Ty a) | TPair a (Ty a) (Ty a) deriving Show
 type TyEnv      = Map Name (TyScheme AnnVar)
 type TySubst    = (Map TyVar (Ty AnnVar), Map AnnVar AnnVar)
 
+data Ampersand a b = Ampersand (Ty a) b
 
 
-{-
-instance Show TySubst where
-  show _ = "TySubst"
--}
 
 data Constr = Super AnnVar Ann | SuperVar AnnVar AnnVar deriving (Eq, Ord, Show)
 type Constrs = Set Constr
@@ -252,6 +249,82 @@ cfaW e (PCase t1 x y t2) = do
   (tau2, th3, c3) <- cfaW e2 t2
   let th' = composeSubst th3 th
   return (tau2, th', substTyAnns th' $ S.unions [c1, c2, c3])
+
+{-
+ctaW :: TyEnv -> Expr -> State Integer (Ampersand (Ty AnnVar) AnnVar, TySubst, Constrs)
+ctaW e (Integer n) = pure (TInt, mempty, mempty)
+ctaW e (Bool b) =    pure (TBool, mempty, mempty)
+ctaW e (Var s) = do
+  x <- cfaInstantiate (findWithDefault (error $ s ++ " not in environment " ++ show e) s e)
+  return (x, mempty, mempty)
+ctaW e (Fn pi x t) = do
+  a1 <- freshVar
+  (tau, th, c) <- cfaW (M.insert x (SType a1) e) t
+  b <- freshAnnVar
+  return (TArrow (substTyVar th a1) b tau, th, c <> S.singleton (Super b (S.singleton $ FunId pi)))
+ctaW e (Fun pi f x t) = do
+  a1 <- freshVar
+  a2 <- freshVar
+  b <- freshAnnVar
+  let e' = M.fromList [(f, SType $ TArrow a1 b a2), (x, SType a1)] `M.union` e
+  (tau, th1, c1) <- cfaW e' t
+  (th2, c2) <- unify tau (substTyVar th1 a2)
+  let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyVar th2 tau)
+  let c3 = S.map (substTyAnnC th2) (S.unions [c1, c2]) <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi))
+  let th = composeSubst th2 th1
+  return (tau', th, substTyAnns th c3)
+ctaW e (App t1 t2)  = do
+  (tau1, th1, c1) <- cfaW e t1
+  (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
+  a <- freshVar
+  b <- freshAnnVar
+  (th3, c3) <- unify' (substTyVar th2 tau1) (TArrow tau2 b a)
+  let th = composeSubsts [th3, th2, th1]
+  return (substTyVar th3 a, th, substTyAnns th $ c1 <> c2 <> c3)
+ctaW e (Let x t1 t2) = do
+  (tau1, th1, c1) <- cfaW e t1
+  let e' = substEnv th1 e
+  let e1 = M.insert x (generalise e' tau1) e'
+  (tau, th2, c2) <- cfaW e1 t2
+  let th = composeSubst th2 th1
+  return (tau, th, substTyAnns th $ c1 <> c2)
+ctaW e (ITE t1 t2 t3) = do
+  (tau1, th1, c1) <- cfaW e t1
+  let e1 = substEnv th1 e
+  (tau2, th2, c2) <- cfaW e1 t2
+  let e2 = substEnv th2 e1
+  (tau3, th3, c3) <- cfaW e2 t3
+  (th4, c4) <- unify (substTyVar th3 (substTyVar th2 tau1)) TBool
+  (th5, c5) <- unify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
+  let th = composeSubsts [th5, th4, th3, th2, th1]
+  return (substTyVar th5 (substTyVar th4 tau3), th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5])
+ctaW e (Oper op t1 t2) = do
+  (tau1, th1, c1) <- cfaW e t1
+  (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
+  (th3, c3) <- unify (substTyVar th2 tau1) TInt
+  (th4, c4) <- unify (substTyVar th3 tau2) TInt
+  let th = composeSubsts [th4, th3, th2, th1]
+  return (TInt, th, substTyAnns th $ S.unions [c1, c2, c3, c4])
+ctaW e (Pair pi t1 t2) = do
+  (tau1, th1, c1) <- cfaW e t1
+  (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
+  a <- freshAnnVar
+  let th = composeSubst th2 th1
+  return (TPair a (substTyVar th tau1) tau2, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 <> c2)
+ctaW e (PCase t1 x y t2) = do
+  (tau1, th1, c1) <- cfaW e t1
+  a1 <- freshVar
+  a2 <- freshVar
+  b <- freshAnnVar
+  (th2, c2) <- unify (TPair b a1 a2) tau1
+  let th = composeSubst th2 th1
+  let e' = substEnv th e
+  let e1 = M.insert x (generalise e' (substTyVar th a1)) e'
+  let e2 = M.insert y (generalise e1 (substTyVar th a2)) e1
+  (tau2, th3, c3) <- cfaW e2 t2
+  let th' = composeSubst th3 th
+  return (tau2, th', substTyAnns th' $ S.unions [c1, c2, c3])
+-}
 
 cfaW' :: Expr -> ((Ty AnnVar, TySubst, Constrs), Integer)
 cfaW' x = flip runState 0 $ cfaW mempty x
