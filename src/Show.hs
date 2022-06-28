@@ -1,6 +1,9 @@
+{-# options_ghc -Wno-orphans #-}
+
 module Show where
 
 import Ast
+import Prelude hiding (pi)
 
 showLabel :: Integer -> ShowS
 showLabel label = showString $ "\ESC[93m" ++ reverse (go label) ++ "\ESC[0m"

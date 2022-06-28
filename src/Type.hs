@@ -9,11 +9,10 @@ import Debug.Trace
 import Ast
 import Show
 import Data.Bifunctor
-import Data.Maybe
 import Data.Map as M
 import Control.Monad.State
-import Data.Traversable
 import Data.List (intercalate)
+import Prelude hiding (pi)
 
 newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId

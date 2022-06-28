@@ -7,7 +7,7 @@ module Main
 
 import System.Environment (getArgs)
 import Ast
-import Show
+import Show ()
 import Type
 import Parsing
 
