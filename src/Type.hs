@@ -122,57 +122,58 @@ chk' a (FreeVar b) s
 chk' a (TArrow t1 _ t2) s = chk a t1 (chk a t2 s)
 chk' _ _ s = s
 
-unify :: Ty AnnVar -> Ty AnnVar -> State Integer (TySubst, Constrs)
-unify TInt TInt   = return mempty
-unify TBool TBool = return mempty
-unify (TPair b1 t1 t2) (TPair b2 t3 t4) = do
-  (a1, c1) <- subeffect b1
-  (a2, c2) <- subeffect b2
-  let th0 = (mempty, M.singleton a1 a2)
-  (th1, c3) <- unify (substTyVar th0 t1) (substTyVar th0 t3)
-  (th2, c4) <- unify (substTyVar th1 (substTyVar th0 t2)) (substTyVar th1 (substTyVar th0 t4))
-  return (composeSubst th2 (composeSubst th1 th0), S.unions [c1, c2, c3, c4])
-unify (TArrow t1 b1 t2) (TArrow t3 b2 t4) = do
-  (a1, c1) <- subeffect b1
-  (a2, c2) <- subeffect b2
-  let th0 = (mempty, M.singleton a1 a2)
-  (th1, c3) <- unify (substTyVar th0 t1) (substTyVar th0 t3)
-  (th2, c4) <- unify (substTyVar th1 (substTyVar th0 t2)) (substTyVar th1 (substTyVar th0 t4))
-  return (composeSubst th2 (composeSubst th1 th0), S.unions [c1, c2, c3, c4])
-unify (FreeVar a) t = return (chk a t (M.singleton a t, mempty), mempty)
-unify t (FreeVar a) = return (chk a t (M.singleton a t, mempty), mempty)
+unify :: Ty AnnVar -> Ty AnnVar -> (TySubst, Ty AnnVar)
+unify TInt TInt   = (mempty, TInt)
+unify TBool TBool = (mempty, TBool)
+unify (TPair b1 t1 t2) (TPair b2 t3 t4) = (composeSubsts [th2, th1, th], TPair b2 (substTyVar th2 left) right)
+  where
+    th = (mempty, M.singleton b1 b2)
+    (th1, left)  = unify (substTyVar th t1) (substTyVar th t3)
+    (th2, right) = unify (substTyVar th1 (substTyVar th t2)) (substTyVar th1 (substTyVar th t4))
+unify (TArrow t1 b1 t2) (TArrow t3 b2 t4) = (composeSubsts [th2, th1, th], TArrow (substTyVar th2 left) b2 right)
+  where
+    th = (mempty, M.singleton b1 b2)
+    (th1, left)  = unify (substTyVar th t1) (substTyVar th t3)
+    (th2, right) = unify (substTyVar th1 (substTyVar th t2)) (substTyVar th1 (substTyVar th t4))
+unify (FreeVar a) t = (chk a t (M.singleton a t, mempty), t)
+unify t (FreeVar a) = (chk a t (M.singleton a t, mempty), t)
 unify a b = error ("cannot unify " ++ show a ++ " ~ " ++ show b)
 
--- | @unify'@ is like @unify@, but does not unify top level annotation variables 
-unify' :: Ty AnnVar -> Ty AnnVar -> State Integer (TySubst, Constrs)
-unify' TInt TInt   = return mempty
-unify' TBool TBool = return mempty
-unify' (TPair _ t1 t2) (TPair _ t3 t4) = do
-  (th1, c1) <- unify t1 t3
-  (th2, c2) <- unify (substTyVar th1 t2) (substTyVar th1 t4)
-  return (composeSubst th2 th1, S.unions [c1, c2])
-unify' (TArrow t1 _ t2) (TArrow t3 _ t4) = do
-  (th1, c1) <- unify t1 t3
-  (th2, c2) <- unify (substTyVar th1 t2) (substTyVar th1 t4)
-  return (composeSubst th2 th1, S.unions [c1, c2])
-unify' (FreeVar a) t = return (chk a t (M.singleton a t, mempty), mempty)
-unify' t (FreeVar a) = return (chk a t (M.singleton a t, mempty), mempty)
-unify' a b = error ("cannot unify " ++ show a ++ " ~ " ++ show b)
-
+{-
 subeffect :: AnnVar -> State Integer (AnnVar, Constrs)
 subeffect a = do
   b <- freshAnnVar
   return (b, S.singleton (SuperVar b a))
+-}
 
+subUnify :: Ty AnnVar -> Ty AnnVar -> State Integer (TySubst, Ty AnnVar, Constrs)
+subUnify a b = do
+  (a', c1) <- subtype a Co
+  (b', c2) <- subtype b Co
+  let (s, t) = unify a' b'
+  return (s, t, c1 <> c2)
+  
 data Variance = Co | Contra
+op :: Variance -> Variance
+op Co = Contra
+op Contra = Co
 
-subtype :: Ty AnnVar -> Variance -> State Integer (Ty AnnVar)
+variance :: Variance -> AnnVar -> AnnVar -> Constr
+variance Co     a b = SuperVar b a
+variance Contra a b = SuperVar a b
+
+subtype :: Ty AnnVar -> Variance -> State Integer (Ty AnnVar, Constrs)
 subtype (TArrow t1 a t2) v = do
-  undefined
-subtype (TPair a t1 t2) v = undefined
-subtype x _ = return x
-
-
+  (t1', c1) <- subtype t1 (op v)
+  b <- freshAnnVar
+  (t2', c2) <- subtype t2 v
+  return (TArrow t1' b t2', S.insert (variance v a b) $ c1 <> c2)
+subtype (TPair a t1 t2) v = do
+  b <- freshAnnVar
+  (t1', c1) <- subtype t1 v
+  (t2', c2) <- subtype t2 v
+  return (TPair b t1' t2', S.insert (variance v a b) $ c1 <> c2)
+subtype x _ = return (x, mempty)
 
 tracePrint :: (Show a, Monad m) => a -> m ()
 tracePrint x = traceShow x $ return () 
@@ -194,9 +195,9 @@ cfaW e (Fun pi f x t) = do
   b <- freshAnnVar
   let e' = M.fromList [(f, SType $ TArrow a1 b a2), (x, SType a1)] `M.union` e
   (tau, th1, c1) <- cfaW e' t
-  (th2, c2) <- unify tau (substTyVar th1 a2)
+  let (th2, _) = unify tau (substTyVar th1 a2)
   let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyVar th2 tau)
-  let c3 = S.map (substTyAnnC th2) (S.unions [c1, c2]) <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi))
+  let c3 = S.map (substTyAnnC th2) (c1 <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi)))
   let th = composeSubst th2 th1
   return (tau', th, substTyAnns th c3)
 cfaW e (App t1 t2)  = do
@@ -204,7 +205,7 @@ cfaW e (App t1 t2)  = do
   (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
   a <- freshVar
   b <- freshAnnVar
-  (th3, c3) <- unify' (substTyVar th2 tau1) (TArrow tau2 b a)
+  (th3, _, c3) <- subUnify (substTyVar th2 tau1) (TArrow tau2 b a)
   let th = composeSubsts [th3, th2, th1]
   return (substTyVar th3 a, th, substTyAnns th $ c1 <> c2 <> c3)
 cfaW e (Let x t1 t2) = do
@@ -220,15 +221,15 @@ cfaW e (ITE t1 t2 t3) = do
   (tau2, th2, c2) <- cfaW e1 t2
   let e2 = substEnv th2 e1
   (tau3, th3, c3) <- cfaW e2 t3
-  (th4, c4) <- unify (substTyVar th3 (substTyVar th2 tau1)) TBool
-  (th5, c5) <- unify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
+  (th4, _, c4) <- subUnify (substTyVar th3 (substTyVar th2 tau1)) TBool
+  (th5, t', c5) <- subUnify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
   let th = composeSubsts [th5, th4, th3, th2, th1]
-  return (substTyVar th5 (substTyVar th4 tau3), th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5])
+  return (t', th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5])
 cfaW e (Oper op t1 t2) = do
   (tau1, th1, c1) <- cfaW e t1
   (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
-  (th3, c3) <- unify (substTyVar th2 tau1) TInt
-  (th4, c4) <- unify (substTyVar th3 tau2) TInt
+  (th3, _, c3) <- subUnify (substTyVar th2 tau1) TInt
+  (th4, _, c4) <- subUnify (substTyVar th3 tau2) TInt
   let th = composeSubsts [th4, th3, th2, th1]
   return (TInt, th, substTyAnns th $ S.unions [c1, c2, c3, c4])
 cfaW e (Pair pi t1 t2) = do
@@ -242,14 +243,14 @@ cfaW e (PCase t1 x y t2) = do
   a1 <- freshVar
   a2 <- freshVar
   b <- freshAnnVar
-  (th2, c2) <- unify (TPair b a1 a2) tau1
+  let (th2, _) = unify (TPair b a1 a2) tau1
   let th = composeSubst th2 th1
   let e' = substEnv th e
   let e1 = M.insert x (generalise e' (substTyVar th a1)) e'
   let e2 = M.insert y (generalise e1 (substTyVar th a2)) e1
-  (tau2, th3, c3) <- cfaW e2 t2
+  (tau2, th3, c2) <- cfaW e2 t2
   let th' = composeSubst th3 th
-  return (tau2, th', substTyAnns th' $ S.unions [c1, c2, c3])
+  return (tau2, th', substTyAnns th' $ c1 <> c2)
 
 {-
 ctaW :: TyEnv -> Expr -> State Integer (Ampersand (Ty AnnVar) AnnVar, TySubst, Constrs)
