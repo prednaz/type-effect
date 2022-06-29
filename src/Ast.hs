@@ -50,6 +50,9 @@ assignLabels e = evalState (go e) 1
     go (Fun _ fn n e') = Fun <$> fresh <*> pure fn <*> pure n <*> go e'
     go (Pair _ e1 e2)  = Pair <$> fresh <*> go e1 <*> go e2
     go (PCase e1 x y e2) = PCase <$> go e1 <*> pure x <*> pure y <*> go e2
+    go (Cons _ e1 e2)  = Cons <$> fresh <*> go e1 <*> go e2
+    go (LCase e1 x y e2 e3) = LCase <$> go e1 <*> pure x <*> pure y <*> go e2 <*> go e3
+    go (Nil _) = Nil <$> fresh
     go x = pure x
 
     fresh :: LabelM Pi
