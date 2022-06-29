@@ -68,7 +68,7 @@ substTyAnns :: TySubst -> Constrs -> Constrs
 substTyAnns s = S.map (substTyAnnC s)
 
 composeSubst :: TySubst -> TySubst -> TySubst
-composeSubst s''@(s, s') t''@(t, t') = (fmap (substTyVar s'') t `M.union` s, fmap (substTyAnn s'') t' `M.union` s')
+composeSubst s''@(s, s') (t, t') = (fmap (substTyVar s'') t `M.union` s, fmap (substTyAnn s'') t' `M.union` s')
 
 composeSubsts :: [TySubst] -> TySubst
 composeSubsts = Prelude.foldr composeSubst mempty
@@ -101,7 +101,7 @@ freeVars _ = mempty
 
 schemeFreeVars :: TyScheme a -> Set TyVar
 schemeFreeVars (SType t)     = freeVars t
-schemeFreeVars (Forall t ts) = S.insert t $ schemeFreeVars ts
+schemeFreeVars (Forall _ ts) = schemeFreeVars ts
 
 envFreeVars :: TyEnv -> Set TyVar
 envFreeVars = M.foldr (\x y -> schemeFreeVars x <> y) mempty
@@ -111,7 +111,7 @@ generalise e t = S.foldr Forall (SType t) (freeVars t `S.difference` envFreeVars
 
 
 chk :: TyVar -> Ty a -> TySubst -> TySubst
-chk a (FreeVar b) = id
+chk _ (FreeVar _) = id
 chk a b           = chk' a b
 
 chk' :: TyVar -> Ty a -> TySubst -> TySubst
@@ -178,8 +178,8 @@ tracePrint :: (Show a, Monad m) => a -> m ()
 tracePrint x = traceShow x $ return () 
 
 cfaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, TySubst, Constrs)
-cfaW e (Integer n) = pure (TInt, mempty, mempty)
-cfaW e (Bool b) =    pure (TBool, mempty, mempty)
+cfaW _ (Integer _) = pure (TInt, mempty, mempty)
+cfaW _ (Bool _) =    pure (TBool, mempty, mempty)
 cfaW e (Var s) = do
   x <- cfaInstantiate (findWithDefault (error $ s ++ " not in environment " ++ show e) s e)
   return (x, mempty, mempty)
@@ -224,7 +224,7 @@ cfaW e (ITE t1 t2 t3) = do
   (th5, t', c5) <- subUnify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
   let th = composeSubsts [th5, th4, th3, th2, th1]
   return (t', th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5])
-cfaW e (Oper op t1 t2) = do
+cfaW e (Oper _ t1 t2) = do
   (tau1, th1, c1) <- cfaW e t1
   (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
   (th3, _, c3) <- subUnify (substTyVar th2 tau1) TInt
@@ -250,6 +250,7 @@ cfaW e (PCase t1 x y t2) = do
   (tau2, th3, c2) <- cfaW e2 t2
   let th' = composeSubst th3 th
   return (tau2, th', substTyAnns th' $ c1 <> c2)
+cfaW _ x = error $ "not implemented: " ++ show x 
 
 {-
 ctaW :: TyEnv -> Expr -> State Integer (Ampersand (Ty AnnVar) AnnVar, TySubst, Constrs)
@@ -342,13 +343,13 @@ solveConstraint cs a = S.unions $ S.map g $ S.filter f cs
 typeOf :: Expr -> TyScheme Ann
 typeOf x = case fst $ cfaW' x of
   (t, s, cs) -> --traceShow cs $ traceShow s $ traceShow t $
-                generalise mempty $ replaceAnnVar (solveConstraint cs) t
+                generalise mempty $ replaceAnnVar (solveConstraint cs) (substTyVar s t)
 
 replaceAnnVar :: (AnnVar -> Ann) -> Ty AnnVar -> Ty Ann
 replaceAnnVar f (TArrow t1 a t2) = TArrow (replaceAnnVar f t1) (f a) (replaceAnnVar f t2)
-replaceAnnVar f (FreeVar tv) = FreeVar tv
-replaceAnnVar f TInt = TInt
-replaceAnnVar f TBool = TBool
+replaceAnnVar _ (FreeVar tv) = FreeVar tv
+replaceAnnVar _ TInt = TInt
+replaceAnnVar _ TBool = TBool
 replaceAnnVar f (TPair a t1 t2) = TPair (f a) (replaceAnnVar f t1) (replaceAnnVar f t2) 
 
 
@@ -378,7 +379,7 @@ instance Pretty (Ty Ann) where
   pretty' b (TArrow t1 a t2) = if b then "(" ++ x ++ ")" else x
     where
       x =  pretty' True t1 ++ " -" ++ pretty' False a ++ "-> " ++ pretty' False t2
-  pretty' b (TPair a t1 t2) = "pair" ++ pretty' False a ++ "(" ++ pretty' False t1 ++ " , " ++ pretty' False t2 ++ ")"
+  pretty' _ (TPair a t1 t2) = "pair" ++ pretty' False a ++ "(" ++ pretty' False t1 ++ " , " ++ pretty' False t2 ++ ")"
 
 instance Pretty FunId where
   pretty' _ (FunId n) = show n

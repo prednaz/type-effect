@@ -1,1 +1,1 @@
-pcase (pair (pair (0 , 1) , 2)) of (x , y) => x
+pcase (Pair (Pair (0 , 1) , 2)) of Pair (x , y) => x

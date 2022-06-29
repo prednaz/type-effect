@@ -1,1 +1,1 @@
-fn p => (pcase p of (x , y) => pair (y , x))
+fn p => (pcase p of Pair (x , y) => Pair (y , x))

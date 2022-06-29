@@ -1,0 +1,1 @@
+let f = fn x => x in Pair (f true, f 0)

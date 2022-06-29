@@ -2,10 +2,10 @@ module Ast where
 
 import Control.Monad.State.Lazy
 
-data Op 
+data Op
   = Add | Sub | Mul | Div
   deriving Eq
-  
+
 type Pi    = Integer -- For numbering lambda's etc. that can then be tracked in the analysis
 type Name  = String  -- For identifier names
 
@@ -28,7 +28,7 @@ data Expr
 
 
 bin :: Name -> Expr -> Expr -> Expr
-bin op x y = Oper r x y where
+bin op = Oper r where
   r = case op of
         "+" -> Add
         "-" -> Sub
