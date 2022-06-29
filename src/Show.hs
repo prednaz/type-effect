@@ -6,7 +6,7 @@ import Ast
 import Prelude hiding (pi)
 
 showLabel :: Integer -> ShowS
-showLabel label = showString $ "\ESC[93m" ++ reverse (go label) ++ "\ESC[0m"
+showLabel label = showString $ reverse (go label)
   where
     go :: Integer -> String
     go x
