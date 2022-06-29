@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TupleSections #-}
 
 module Type where
 
@@ -20,35 +21,28 @@ type Ann        = Set FunId
 newtype AnnVar  = AnnVar Integer deriving (Eq, Ord, Show)
 data TyVar      = TyVar Name Integer deriving (Eq, Show, Ord)
 data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
-data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a (Ty a) | TPair a (Ty a) (Ty a) deriving Show
+data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a a (Ty a) | TPair a (Ty a) (Ty a) deriving Show
 type TyEnv      = Map Name (TyScheme AnnVar)
 type TySubst    = (Map TyVar (Ty AnnVar), Map AnnVar AnnVar)
-
-data Ampersand a b = Ampersand (Ty a) b
-
-
 
 data Constr = Super AnnVar Ann | SuperVar AnnVar AnnVar deriving (Eq, Ord, Show)
 type Constrs = Set Constr
 
-newtype RdrName = RdrName String
 data Id         = Id Name Integer
 
---findWithDefault :: Ord k => v -> k -> [(k, v)] -> v
---findWithDefault d k m = fromMaybe d (lookup k m)
 
 replaceTyVar :: (TyVar -> TyVar) -> Ty a -> Ty a
 replaceTyVar f (FreeVar v) = FreeVar $ f v
 replaceTyVar _ TInt = TInt
 replaceTyVar _ TBool = TBool
-replaceTyVar f (TArrow t1 cs t2) = TArrow (replaceTyVar f t1) cs (replaceTyVar f t2)
+replaceTyVar f (TArrow t1 a b t2) = TArrow (replaceTyVar f t1) a b (replaceTyVar f t2)
 replaceTyVar f (TPair cs t1 t2) = TPair cs (replaceTyVar f t1) (replaceTyVar f t2)
 
 substTyVar :: TySubst -> Ty AnnVar -> Ty AnnVar
 substTyVar s (FreeVar v) = findWithDefault (FreeVar v) v (fst s)
 substTyVar _ TInt = TInt
 substTyVar _ TBool = TBool
-substTyVar s (TArrow t1 a t2) = TArrow (substTyVar s t1) (findWithDefault a a (snd s)) (substTyVar s t2)
+substTyVar s (TArrow t1 a b t2) = TArrow (substTyVar s t1) (findWithDefault a a (snd s)) (findWithDefault b b (snd s)) (substTyVar s t2)
 substTyVar s (TPair a t1 t2) = TPair (findWithDefault a a (snd s)) (substTyVar s t1) (substTyVar s t2)
 
 substTyScheme :: TySubst -> TyScheme AnnVar -> TyScheme AnnVar
@@ -96,7 +90,7 @@ cfaInstantiate (Forall v ts) = do
 
 freeVars :: Ty a -> Set TyVar
 freeVars (FreeVar v) = S.singleton v
-freeVars (TArrow t1 _ t2) = freeVars t1 <> freeVars t2
+freeVars (TArrow t1 _ _ t2) = freeVars t1 <> freeVars t2
 freeVars (TPair _ t1 t2) = freeVars t1 <> freeVars t2
 freeVars _ = mempty
 
@@ -119,7 +113,7 @@ chk' :: TyVar -> Ty a -> TySubst -> TySubst
 chk' a (FreeVar b) s
   | a == b    = error $ show a ++ " matches " ++ show b ++ " in chk"
   | otherwise = s
-chk' a (TArrow t1 _ t2) s = chk a t1 (chk a t2 s)
+chk' a (TArrow t1 _ _ t2) s = chk a t1 (chk a t2 s)
 chk' _ _ s = s
 
 unify :: Ty AnnVar -> Ty AnnVar -> (TySubst, Ty AnnVar)
@@ -130,9 +124,9 @@ unify (TPair b1 t1 t2) (TPair b2 t3 t4) = (composeSubsts [th2, th1, th], TPair b
     th = (mempty, M.singleton b1 b2)
     (th1, left)  = unify (substTyVar th t1) (substTyVar th t3)
     (th2, right) = unify (substTyVar th1 (substTyVar th t2)) (substTyVar th1 (substTyVar th t4))
-unify (TArrow t1 b1 t2) (TArrow t3 b2 t4) = (composeSubsts [th2, th1, th], TArrow (substTyVar th2 left) b2 right)
+unify (TArrow t1 a1 b1 t2) (TArrow t3 a2 b2 t4) = (composeSubsts [th2, th1, th], TArrow (substTyVar th2 left) a2 b2 right)
   where
-    th = (mempty, M.singleton b1 b2)
+    th = (mempty, M.fromList [(b1, b2), (a1, a2)])
     (th1, left)  = unify (substTyVar th t1) (substTyVar th t3)
     (th2, right) = unify (substTyVar th1 (substTyVar th t2)) (substTyVar th1 (substTyVar th t4))
 unify (FreeVar a) t = (chk a t (M.singleton a t, mempty), t)
@@ -170,11 +164,12 @@ variance Contra a b = SuperVar a b
 variance Invariant _ _ = error "cannot generate constraint for invariant annotation variable"
 
 subtype :: Ty AnnVar -> Variance -> State Integer (Ty AnnVar, Constrs)
-subtype (TArrow t1 a t2) v = do
+subtype (TArrow t1 a b t2) v = do
   (t1', c1) <- subtype t1 (op v)
-  b <- freshAnnVar
+  a' <- freshAnnVar
+  b' <- freshAnnVar
   (t2', c2) <- subtype t2 v
-  return (TArrow t1' b t2', S.insert (variance v a b) $ c1 <> c2)
+  return (TArrow t1' a' b' t2', S.insert (variance v a a') $ S.insert (variance v b b') $ c1 <> c2)
 subtype (TPair a t1 t2) v = do
   b <- freshAnnVar
   (t1', c1) <- subtype t1 v
@@ -185,6 +180,7 @@ subtype x _ = return (x, mempty)
 tracePrint :: (Show a, Monad m) => a -> m ()
 tracePrint x = traceShow x $ return () 
 
+{-
 cfaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, TySubst, Constrs)
 cfaW _ (Integer _) = pure (TInt, mempty, mempty)
 cfaW _ (Bool _) =    pure (TBool, mempty, mempty)
@@ -260,92 +256,111 @@ cfaW e (PCase t1 x y t2) = do
   let th' = composeSubst th3 th
   return (tau2, th', substTyAnns th' $ c1 <> c2)
 cfaW _ x = error $ "not implemented: " ++ show x 
+-}
 
-{-
-ctaW :: TyEnv -> Expr -> State Integer (Ampersand (Ty AnnVar) AnnVar, TySubst, Constrs)
-ctaW e (Integer n) = pure (TInt, mempty, mempty)
-ctaW e (Bool b) =    pure (TBool, mempty, mempty)
+ctaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, AnnVar, TySubst, Constrs)
+ctaW _ (Integer _) = (TInt,, mempty, mempty) <$> freshAnnVar
+ctaW _ (Bool _)    = (TBool,, mempty, mempty) <$> freshAnnVar
 ctaW e (Var s) = do
   x <- cfaInstantiate (findWithDefault (error $ s ++ " not in environment " ++ show e) s e)
-  return (x, mempty, mempty)
+  (x,, mempty, mempty) <$> freshAnnVar
 ctaW e (Fn pi x t) = do
   a1 <- freshVar
-  (tau, th, c) <- cfaW (M.insert x (SType a1) e) t
+  (tau, eff, th, c) <- ctaW (M.insert x (SType a1) e) t
   b <- freshAnnVar
-  return (TArrow (substTyVar th a1) b tau, th, c <> S.singleton (Super b (S.singleton $ FunId pi)))
+  o <- freshAnnVar
+  return (TArrow (substTyVar th a1) b eff tau, o, th, c <> S.singleton (Super b (S.singleton $ FunId pi)))
 ctaW e (Fun pi f x t) = do
   a1 <- freshVar
   a2 <- freshVar
   b <- freshAnnVar
-  let e' = M.fromList [(f, SType $ TArrow a1 b a2), (x, SType a1)] `M.union` e
-  (tau, th1, c1) <- cfaW e' t
-  (th2, c2) <- unify tau (substTyVar th1 a2)
-  let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyVar th2 tau)
-  let c3 = S.map (substTyAnnC th2) (S.unions [c1, c2]) <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi))
+  c <- freshAnnVar
+  let e' = M.fromList [(f, SType $ TArrow a1 b c a2), (x, SType a1)] `M.union` e
+  (tau, eff, th1, c1) <- ctaW e' t
+  let (th2, _) = unify tau (substTyVar th1 a2)
+  let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyAnn th2 (substTyAnn th1 eff)) (substTyVar th2 tau)
+  let c3 = S.map (substTyAnnC th2) (c1 <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi)))
   let th = composeSubst th2 th1
-  return (tau', th, substTyAnns th c3)
+  o <- freshAnnVar
+  return (tau', o, th, substTyAnns th c3)
 ctaW e (App t1 t2)  = do
-  (tau1, th1, c1) <- cfaW e t1
-  (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
+  (tau1, eff1, th1, c1) <- ctaW e t1
+  (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
   a <- freshVar
   b <- freshAnnVar
-  (th3, c3) <- unify' (substTyVar th2 tau1) (TArrow tau2 b a)
+  eff3 <- freshAnnVar
+  let (th3, _) = unify (substTyVar th2 tau1) (TArrow tau2 b eff3 a)
+  -- (th3, _, c3) <- subUnify (substTyVar th2 tau1) (TArrow tau2 b a)
   let th = composeSubsts [th3, th2, th1]
-  return (substTyVar th3 a, th, substTyAnns th $ c1 <> c2 <> c3)
+  eff <- freshAnnVar
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3, SuperVar eff b]
+  return (substTyVar th3 a, eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (Let x t1 t2) = do
-  (tau1, th1, c1) <- cfaW e t1
+  (tau1, eff1, th1, c1) <- ctaW e t1
   let e' = substEnv th1 e
   let e1 = M.insert x (generalise e' tau1) e'
-  (tau, th2, c2) <- cfaW e1 t2
+  (tau, eff2, th2, c2) <- ctaW e1 t2
   let th = composeSubst th2 th1
-  return (tau, th, substTyAnns th $ c1 <> c2)
+  eff <- freshAnnVar
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  return (tau, eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (ITE t1 t2 t3) = do
-  (tau1, th1, c1) <- cfaW e t1
+  (tau1, eff1, th1, c1) <- ctaW e t1
   let e1 = substEnv th1 e
-  (tau2, th2, c2) <- cfaW e1 t2
+  (tau2, eff2, th2, c2) <- ctaW e1 t2
   let e2 = substEnv th2 e1
-  (tau3, th3, c3) <- cfaW e2 t3
-  (th4, c4) <- unify (substTyVar th3 (substTyVar th2 tau1)) TBool
-  (th5, c5) <- unify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
+  (tau3, eff3, th3, c3) <- ctaW e2 t3
+  (th4, _, c4) <- subUnify (substTyVar th3 (substTyVar th2 tau1)) TBool
+  (th5, t', c5) <- subUnify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
   let th = composeSubsts [th5, th4, th3, th2, th1]
-  return (substTyVar th5 (substTyVar th4 tau3), th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5])
-ctaW e (Oper op t1 t2) = do
-  (tau1, th1, c1) <- cfaW e t1
-  (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
-  (th3, c3) <- unify (substTyVar th2 tau1) TInt
-  (th4, c4) <- unify (substTyVar th3 tau2) TInt
+  eff <- freshAnnVar
+  let c6 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3]
+  return (t', eff, th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5, c6])
+ctaW e (Oper _ t1 t2) = do
+  (tau1, eff1, th1, c1) <- ctaW e t1
+  (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
+  (th3, _, c3) <- subUnify (substTyVar th2 tau1) TInt
+  (th4, _, c4) <- subUnify (substTyVar th3 tau2) TInt
   let th = composeSubsts [th4, th3, th2, th1]
-  return (TInt, th, substTyAnns th $ S.unions [c1, c2, c3, c4])
+  eff <- freshAnnVar
+  let c5 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  return (TInt, eff, th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5])
 ctaW e (Pair pi t1 t2) = do
-  (tau1, th1, c1) <- cfaW e t1
-  (tau2, th2, c2) <- cfaW (substEnv th1 e) t2
+  (tau1, eff1, th1, c1) <- ctaW e t1
+  (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
   a <- freshAnnVar
   let th = composeSubst th2 th1
-  return (TPair a (substTyVar th tau1) tau2, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 <> c2)
+  eff <- freshAnnVar
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  return (TPair a (substTyVar th tau1) tau2, eff, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 <> c2 <> c3)
 ctaW e (PCase t1 x y t2) = do
-  (tau1, th1, c1) <- cfaW e t1
+  (tau1, eff1, th1, c1) <- ctaW e t1
   a1 <- freshVar
   a2 <- freshVar
   b <- freshAnnVar
-  (th2, c2) <- unify (TPair b a1 a2) tau1
+  let (th2, _) = unify (TPair b a1 a2) tau1
   let th = composeSubst th2 th1
   let e' = substEnv th e
   let e1 = M.insert x (generalise e' (substTyVar th a1)) e'
   let e2 = M.insert y (generalise e1 (substTyVar th a2)) e1
-  (tau2, th3, c3) <- cfaW e2 t2
+  (tau2, eff2, th3, c2) <- ctaW e2 t2
   let th' = composeSubst th3 th
-  return (tau2, th', substTyAnns th' $ S.unions [c1, c2, c3])
--}
+  eff <- freshAnnVar
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  return (tau2, eff, th', substTyAnns th' $ c1 <> c2 <> c3)
+ctaW _ x = error $ "not implemented: " ++ show x 
 
-cfaW' :: Expr -> ((Ty AnnVar, TySubst, Constrs), Integer)
-cfaW' x = flip runState 0 $ cfaW mempty x
+
+
+ctaW' :: Expr -> ((Ty AnnVar, AnnVar, TySubst, Constrs), Integer)
+ctaW' x = flip runState 0 $ ctaW mempty x
 
 type Polarity = Maybe Variance
 
 polarity :: Ty AnnVar -> AnnVar -> Variance -> Polarity
-polarity (TArrow t1 a t2) b v 
-  | a == b    = Just v
-  | otherwise = polarity t1 b (op v) <> polarity t2 b v
+polarity (TArrow t1 a b t2) c v 
+  | a == b || a == c = Just v
+  | otherwise        = polarity t1 c (op v) <> polarity t2 c v
 polarity (TPair a t1 t2) b v 
   | a == b    = Just v
   | otherwise = polarity t1 b v <> polarity t2 b v
@@ -402,13 +417,14 @@ labels (Nil i)              = S.singleton (FunId i)
 labels (LCase x1 _ _ x2 x3) = labels x1 <> labels x2 <> labels x3
 labels _ = mempty
 
-typeOf :: Expr -> TyScheme Ann
-typeOf x = case fst $ cfaW' x of
-  (t, s, cs) -> traceShow cs $ traceShow s $ traceShow t $
-                generalise mempty $ replaceAnnVar (solveConstraint' t cs (labels x)) t
+typeOf :: Expr -> (TyScheme Ann, Ann)
+typeOf x = case fst $ ctaW' x of
+  (t, eff, s, cs) -> traceShow cs $ traceShow s $ traceShow t $ traceShow eff $
+                (generalise mempty $ replaceAnnVar (solveConstraint cs) t
+                , solveConstraint cs eff)
 
 replaceAnnVar :: (AnnVar -> Ann) -> Ty AnnVar -> Ty Ann
-replaceAnnVar f (TArrow t1 a t2) = TArrow (replaceAnnVar f t1) (f a) (replaceAnnVar f t2)
+replaceAnnVar f (TArrow t1 a b t2) = TArrow (replaceAnnVar f t1) (f a) (f b) (replaceAnnVar f t2)
 replaceAnnVar _ (FreeVar tv) = FreeVar tv
 replaceAnnVar _ TInt = TInt
 replaceAnnVar _ TBool = TBool
@@ -438,9 +454,9 @@ instance Pretty a => Pretty (Ty a) where
   pretty' _ (FreeVar v) = pretty' False v
   pretty' _ TInt = "Int"
   pretty' _ TBool = "Bool"
-  pretty' b (TArrow t1 a t2) = if b then "(" ++ x ++ ")" else x
+  pretty' b (TArrow t1 a a' t2) = if b then "(" ++ x ++ ")" else x
     where
-      x =  pretty' True t1 ++ " -" ++ pretty' False a ++ "-> " ++ pretty' False t2
+      x =  pretty' True t1 ++ " -" ++ pretty' False a ++ ";" ++ pretty' False a' ++ "-> " ++ pretty' False t2
   pretty' _ (TPair a t1 t2) = "pair" ++ pretty' False a ++ "(" ++ pretty' False t1 ++ " , " ++ pretty' False t2 ++ ")"
 
 instance Pretty FunId where
@@ -450,3 +466,6 @@ instance Pretty Ann where
 
 instance Pretty AnnVar where
   pretty' _ (AnnVar i) = "b" ++ showLabel i ""
+
+instance Pretty (TyScheme Ann, Ann) where
+  pretty' _ (t, eff) = pretty t ++ " & " ++ pretty eff
