@@ -1,0 +1,1 @@
+fn xs => (lcase xs of Cons(hd, tl) => tl or Nil) 

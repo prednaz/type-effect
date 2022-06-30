@@ -1,0 +1,389 @@
+triple
+Expression:
+let f =
+  fn₁ x =>
+    x + 1
+in
+  let g =
+    fn₂ y =>
+      y * 2
+  in
+    let h =
+      fn₃ z =>
+        z 3
+    in
+      let k =
+        h g + h f
+      in
+        h
+
+Type:
+forall a₃₆.(Int -{1,2};{}-> a₃₆) -{3};{1,2}-> a₃₆ & {1,2,3}
+
+swap1
+Expression:
+fn₁ p =>
+  pcase p of Pair(x , y) => Pair₂ (y , x)
+
+Type:
+forall a₂ a₃.pair{}(a₂ , a₃) -{1};{}-> pair{2}(a₃ , a₂) & {}
+
+swap
+Expression:
+let swap =
+  fn₁ p =>
+    pcase p of Pair(x , y) => Pair₂ (y , x)
+in
+  let f =
+    fn₃ x =>
+      x
+  in
+    let g =
+      fn₄ y =>
+        y
+    in
+      let p =
+        swap (Pair₅ (f , g))
+      in
+        pcase p of Pair(h , k) => k
+
+Type:
+forall a₃₉.a₃₉ -{3};{}-> a₃₉ & {1}
+
+sub_problem
+Expression:
+let f =
+  fn₁ h =>
+    h 0 + 0
+in
+  let g =
+    fn₂ h =>
+      h 0 + 0
+  in
+    let h =
+      fn₃ a =>
+        a
+    in
+      let x =
+        f h
+      in
+        let y =
+          g h
+        in
+          if  false
+          then  f
+          else  g
+
+Type:
+(Int -{};{}-> Int) -{1,2};{3}-> Int & {1,2,3}
+
+sub1
+Expression:
+let f =
+  fn₁ h =>
+    h 0 + 0
+in
+  let g =
+    fn₂ h =>
+      h 0 + 0
+  in
+    let x =
+      f (fn₃ a =>
+        a
+      )
+    in
+      if  false
+      then  f
+      else  g
+
+Type:
+(Int -{};{}-> Int) -{1,2};{3}-> Int & {1,3}
+
+sub
+Expression:
+let const =
+  fn₁ a =>
+    fn₂ b =>
+      a
+in
+  let f =
+    fn₃ h =>
+      const (fn₄ a =>
+        a
+      ) (h 0)
+  in
+    let g =
+      fn₅ h =>
+        const (fn₆ a =>
+          a
+        ) (h 0)
+    in
+      let x =
+        f (fn₇ a =>
+          a
+        )
+      in
+        let y =
+          g (fn₈ a =>
+            a
+          )
+        in
+          if  false
+          then  f
+          else  g
+
+Type:
+forall a₈₁ a₈₂.(Int -{};{}-> a₈₂) -{3,5};{1,2,7,8}-> a₈₁ -{4,6};{}-> a₈₁ & {1,2,3,5,7,8}
+
+simpler
+Expression:
+fn₁ x =>
+  fn₂ y =>
+    x
+
+Type:
+forall a₀ a₁.a₀ -{1};{}-> a₁ -{2};{}-> a₀ & {}
+
+simple
+Expression:
+let i =
+  fn₁ x =>
+    x
+in
+  i i
+
+Type:
+forall a₆.a₆ -{1};{}-> a₆ & {1}
+
+safetail
+Expression:
+fn₁ xs =>
+  lcase xs of Cons(hd , tl) => tl or Nil₂
+
+Type:
+forall a₅.(a₅ list{}) -{1};{}-> a₅ list{2} & {}
+
+safehead
+Expression:
+let f =
+  fn₁ x =>
+    fn₂ xs =>
+      lcase xs of Cons(hd , tl) => hd or x
+in
+  f
+
+Type:
+forall a₁₂.a₁₂ -{1};{}-> (a₁₂ list{}) -{2};{}-> a₁₂ & {}
+
+recurse
+Expression:
+let g =
+  fun₁ f x =>
+    f (fn₂ y =>
+      y
+    )
+in
+  g (fn₃ z =>
+    z
+  )
+
+Type:
+forall a₂₁.a₂₁ & {1}
+
+poison1
+Expression:
+let f =
+  fn₁ a =>
+    a + 1
+in
+  let g =
+    fn₂ a =>
+      a + 1
+  in
+    let h =
+      (fn₃ b =>
+        fn₄ c =>
+          if  false
+          then  b
+          else  c
+      ) f g
+    in
+      f
+
+Type:
+Int -{1,2};{}-> Int & {3,4}
+
+poison
+Expression:
+(fn₁ f =>
+  (fn₂ g =>
+    (fn₃ h =>
+      f
+    ) (if  false
+    then  f
+    else  g
+    )
+  ) (fn₄ a =>
+    a + 1
+  )
+) (fn₅ a =>
+  a + 1
+)
+Type:
+Int -{4,5};{}-> Int & {1,2,3}
+
+pair
+Expression:
+pcase (Pair₁ (Pair₂ (0 , 1) , 2)) of Pair(x , y) => x
+Type:
+pair{2}(Int , Int) & {}
+
+oddpoly
+Expression:
+let f =
+  fn₁ g =>
+    g 0
+in
+  let z =
+    fn₂ x =>
+      f x + 0
+  in
+    f
+
+Type:
+forall a₂₁.(Int -{};{}-> a₂₁) -{1};{}-> a₂₁ & {}
+
+no-poison
+Expression:
+let f =
+  fn₁ a =>
+    a + 1
+in
+  let g =
+    fn₂ a =>
+      a + 1
+  in
+    let h =
+      if  false
+      then  f
+      else  g
+    in
+      f
+
+Type:
+Int -{1};{}-> Int & {}
+
+nil
+Expression:
+lcase Nil₁ of Cons(hd , tl) => tl or Nil₂
+Type:
+forall a₆.a₆ list{1,2} & {}
+
+list
+Expression:
+Cons₁ (0 , Cons₂ (1 , Nil₃))
+Type:
+Int list{1,2,3} & {}
+
+letpoly
+Expression:
+let f =
+  fn₁ x =>
+    x
+in
+  Pair₂ (f true , f 0)
+
+Type:
+pair{2}(Bool , Int) & {1}
+
+letintfun
+Expression:
+let f =
+  fn₁ g =>
+    g 0
+in
+  let z =
+    f (fn₂ x =>
+      x
+    ) + 1
+  in
+    f
+
+Type:
+forall a₂₁.(Int -{2};{}-> a₂₁) -{1};{2}-> a₂₁ & {1,2}
+
+let
+Expression:
+fn₁ x =>
+  let y =
+    x
+  in
+    y
+
+Type:
+forall a₀.a₀ -{1};{}-> a₀ & {}
+
+funlist
+Expression:
+Cons₁ (fn₂ x =>
+  x
+ , Cons₃ (fn₄ y =>
+  y
+ , Nil₅))
+Type:
+forall a₄.(a₄ -{2,4};{}-> a₄) list{1,3,5} & {}
+
+bin
+Expression:
+fn₁ x =>
+  fn₂ y =>
+    if  true
+    then  x
+    else  y
+
+Type:
+forall a₁.a₁ -{1};{}-> a₁ -{2};{}-> a₁ & {}
+
+arewestrict
+Expression:
+let f =
+  fn₁ x =>
+    x
+in
+  let g =
+    fn₂ y =>
+      0
+  in
+    g (f 0)
+
+Type:
+Int & {1,2}
+
+apply
+Expression:
+let f =
+  fn₁ g =>
+    g 0
+in
+  let z =
+    f (fn₂ x =>
+      x
+    )
+  in
+    f
+
+Type:
+forall a₁₉.(Int -{2};{}-> a₁₉) -{1};{2}-> a₁₉ & {1,2}
+
+append
+Expression:
+let append =
+  fun₁ f xs =>
+    fn₂ ys =>
+      lcase xs of Cons(hd , tl) => Cons₃ (hd , f tl ys) or ys
+in
+  append
+
+Type:
+forall a₂₉.(a₂₉ list{}) -{1};{}-> (a₂₉ list{3}) -{2};{1,2}-> a₂₉ list{3} & {}
+

@@ -15,6 +15,7 @@ import Data.List as L
 import Control.Monad.State
 import Prelude hiding (pi)
 import Data.Graph
+import Data.Maybe
 
 newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId
@@ -94,11 +95,13 @@ freeVars :: Ty a -> Set TyVar
 freeVars (FreeVar v) = S.singleton v
 freeVars (TArrow t1 _ _ t2) = freeVars t1 <> freeVars t2
 freeVars (TPair _ t1 t2) = freeVars t1 <> freeVars t2
+freeVars (TList t _) = freeVars t
 freeVars _ = mempty
 
 freeAnnVars :: Ty AnnVar -> Set AnnVar
 freeAnnVars (TArrow _ a b _) = S.fromList [a, b]
 freeAnnVars (TPair a _ _) = S.singleton a
+freeAnnVars (TList _ a) = S.singleton a
 freeAnnVars _ = mempty
 
 
@@ -137,7 +140,7 @@ unify (TArrow t1 a1 b1 t2) (TArrow t3 a2 b2 t4) = (composeSubsts [th2, th1, th],
     th = (mempty, M.fromList [(b1, b2), (a1, a2)])
     (th1, left)  = unify (substTyVar th t1) (substTyVar th t3)
     (th2, right) = unify (substTyVar th1 (substTyVar th t2)) (substTyVar th1 (substTyVar th t4))
-unify (TList t1 a1) (TList t2 a2) = (composeSubst th1 th, t3)
+unify (TList t1 a1) (TList t2 a2) = (composeSubst th1 th, TList t3 a2)
   where
     th = (mempty, M.singleton a1 a2)
     (th1, t3) = unify (substTyVar th t1) (substTyVar th t2)
@@ -181,6 +184,10 @@ subtype (TPair a t1 t2) v = do
   (t1', c1) <- subtype t1 v
   (t2', c2) <- subtype t2 v
   return (TPair b t1' t2', S.insert (variance v a b) $ c1 <> c2)
+subtype (TList t a) v = do
+  b <- freshAnnVar
+  (t', c) <- subtype t v
+  return (TList t' b, S.insert (variance v a b) c)
 subtype x _ = return (x, mempty)
 
 tracePrint :: (Show a, Monad m) => a -> m ()
@@ -285,12 +292,12 @@ ctaW e (Cons i t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
   a <- freshAnnVar
-  (th3, tau3, c3) <- subUnify (substTyVar th2 $ TList tau1 a) tau2
+  let (th3, _) = unify (substTyVar th2 $ TList tau1 a) tau2
   let th = composeSubsts [th3, th2, th1]
   a' <- freshAnnVar
   eff <- freshAnnVar
-  let c4 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a, Super a' (S.singleton $ FunId i)]
-  return (TList tau3 a', eff, th, substTyAnns th $ c1 <> c2 <> c3 <> c4)
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a, Super a' (S.singleton $ FunId i)]
+  return (TList (substTyVar th tau1) a', eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (LCase t1 hd tl t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   tau <- freshVar
@@ -324,10 +331,10 @@ polarity (TPair a t1 t2) b v
 polarity _ _ _ = Nothing
 
 
-toGraph :: [AnnVar] -> Constrs -> [(AnnVar, AnnVar, [AnnVar])]
-toGraph as cs = [(k, k, v) | (k, v) <- M.toList es]
+toGraph :: Constrs -> [(AnnVar, AnnVar, [AnnVar])]
+toGraph cs = [(k, k, v) | (k, v) <- M.toList es]
   where
-    es = L.foldr collect2 (S.foldr collect mempty cs) as
+    es = S.foldr collect mempty cs
 
     addEdge b (Just c) = Just (b:c)
     addEdge b Nothing  = Just [b]
@@ -335,10 +342,8 @@ toGraph as cs = [(k, k, v) | (k, v) <- M.toList es]
     collect (SuperVar a b) = M.alter (addEdge b) a
     collect _ = id
 
-    collect2 a = M.alter (addEdge a) a
-
 findSCC :: Eq node => node -> [[node]] -> [node]
-findSCC x xss = head $ L.filter (x `elem`) xss
+findSCC x xss = fromMaybe [x] $ find (x `elem`) xss
 
 solveAt :: Constrs -> AnnVar -> Ann
 solveAt cs a = S.unions $ S.map g $ S.filter f cs
@@ -365,10 +370,10 @@ solveBelow cs ss a = S.unions $ S.map (solveSCC cs ss) h
 solveSCC :: Constrs -> [[AnnVar]] -> [AnnVar] -> Ann
 solveSCC cs ss s = S.unions $ (solveAt cs <$> s) ++ (solveBelow cs ss <$> s)
 
-solveConstraints :: Constrs -> [AnnVar] -> AnnVar -> Ann
-solveConstraints cs as a = solveSCC cs ss (findSCC a ss)
+solveConstraints :: Constrs -> AnnVar -> Ann
+solveConstraints cs a = solveSCC cs ss (findSCC a ss)
   where
-    ss = flattenSCC <$> stronglyConnComp (toGraph as cs)
+    ss = flattenSCC <$> stronglyConnComp (toGraph cs)
 
 
 labels :: Expr -> Ann
@@ -394,10 +399,8 @@ constraintVars = S.foldr h mempty
 typeOf :: Expr -> (TyScheme Ann, Ann)
 typeOf x = case fst $ ctaW' x of
   (t, eff, _, cs) -> --traceShow cs $ traceShow s $ traceShow t $ traceShow eff
-                (generalise mempty $ replaceAnnVar (solveConstraints cs as) t
-                , solveConstraints cs as eff)
-                  where
-                    as = S.toList $ freeAnnVars t <> constraintVars cs
+                (generalise mempty $ replaceAnnVar (solveConstraints cs) t
+                , solveConstraints cs eff)
 
 replaceAnnVar :: (AnnVar -> Ann) -> Ty AnnVar -> Ty Ann
 replaceAnnVar f (TArrow t1 a b t2) = TArrow (replaceAnnVar f t1) (f a) (f b) (replaceAnnVar f t2)
@@ -435,7 +438,9 @@ instance Pretty a => Pretty (Ty a) where
     where
       x =  pretty' True t1 ++ " -" ++ pretty' False a ++ ";" ++ pretty' False a' ++ "-> " ++ pretty' False t2
   pretty' _ (TPair a t1 t2) = "pair" ++ pretty' False a ++ "(" ++ pretty' False t1 ++ " , " ++ pretty' False t2 ++ ")"
-  pretty' _ (TList t a) = pretty' True t ++ " list" ++ pretty' False a
+  pretty' b (TList t a) = if b then "(" ++ x ++ ")" else x
+    where
+      x = pretty' True t ++ " list" ++ pretty' False a
 
 instance Pretty FunId where
   pretty' _ (FunId n) = show n

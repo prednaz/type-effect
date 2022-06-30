@@ -24,7 +24,7 @@ main = do
   args <- getArgs
   case args of
     ["allExamples"] ->
-      ((=<<) . traverse_) (\f -> run f *> putStrLn "") $
+      ((=<<) . traverse_) (\f -> putStrLn f *> run f *> putStrLn "") $
       allExamples
     [name] -> run name
     _ -> do

@@ -1,0 +1,1 @@
+lcase Nil of Cons(hd, tl) => tl or Nil
