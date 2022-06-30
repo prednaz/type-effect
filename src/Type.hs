@@ -201,6 +201,9 @@ annUnion as = do
     a <- freshAnnVar
     return (a, S.fromList $ SuperVar a <$> as)
 
+genIn :: Name -> Ty AnnVar -> TyEnv -> TyEnv
+genIn x t e = M.insert x (generalise e t) e
+
 ctaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, AnnVar, TySubst, Constrs)
 ctaW _ (Integer _) = (TInt,, mempty, mempty) <$> freshAnnVar
 ctaW _ (Bool _)    = (TBool,, mempty, mempty) <$> freshAnnVar
@@ -238,9 +241,8 @@ ctaW e (App t1 t2)  = do
   return (subst th3 a, eff, th, subst th $ c1 <> c2 <> c3)
 ctaW e (Let x t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
-  let e' = subst th1 e
-  let e1 = M.insert x (generalise e' tau1) e'
-  (tau, eff2, th2, c2) <- ctaW e1 t2
+  let e' = genIn x tau1 (subst th1 e)
+  (tau, eff2, th2, c2) <- ctaW e' t2
   let th = th2 <> th1
   (eff, c3) <- annUnion [eff1, eff2]
   return (tau, eff, th, subst th $ c1 <> c2 <> c3)
@@ -277,10 +279,8 @@ ctaW e (PCase t1 x y t2) = do
   b <- freshAnnVar
   let (th2, _) = unify (TPair b a1 a2) tau1
   let th = th2 <> th1
-  let e' = subst th e
-  let e1 = M.insert x (generalise e' (subst th a1)) e'
-  let e2 = M.insert y (generalise e1 (subst th a2)) e1
-  (tau2, eff2, th3, c2) <- ctaW e2 t2
+  let e' = genIn x (subst th a1) $ genIn y (subst th a2) $ subst th e
+  (tau2, eff2, th3, c2) <- ctaW e' t2
   let th' = th3 <> th
   (eff, c3) <- annUnion [eff1, eff2]
   return (tau2, eff, th', subst th' $ c1 <> c2 <> c3)
@@ -305,10 +305,8 @@ ctaW e (LCase t1 hd tl t2 t3) = do
   a <- freshAnnVar
   let (th2, _) = unify (TList tau a) tau1
   let th = th2 <> th1
-  let e' = subst th e
-  let e1 = M.insert hd (generalise e' (subst th tau)) e'
-  let e2 = M.insert tl (generalise e1 (subst th tau1)) e1
-  (tau2, eff2, th3, c2) <- ctaW e2 t2
+  let e' = genIn hd (subst th tau) $ genIn tl (subst th tau1) $ subst th e
+  (tau2, eff2, th3, c2) <- ctaW e' t2
   (tau3, eff3, th4, c3) <- ctaW e t3
   (th5, tau4, c4) <- subUnify (subst th4 $ subst th tau2) tau3
   let th' = fold [th5, th3, th]

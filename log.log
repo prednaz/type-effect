@@ -277,7 +277,7 @@ nil
 Expression:
 lcase Nil₁ of Cons(hd , tl) => tl or Nil₂
 Type:
-forall a₆.a₆ list{1,2} & {}
+forall a₇.a₇ list{1,2} & {}
 
 list
 Expression:
