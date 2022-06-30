@@ -42,6 +42,8 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - tande
+    - path
+    - path-io
 
 tests:
   tande-test:
