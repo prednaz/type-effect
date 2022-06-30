@@ -32,6 +32,10 @@ type Constrs = Set Constr
 data Id         = Id Name Integer
 
 
+--class Substitute a where
+--  substitute :: TySubst -> a -> a
+
+
 replaceTyVar :: (TyVar -> TyVar) -> Ty a -> Ty a
 replaceTyVar f (FreeVar v) = FreeVar $ f v
 replaceTyVar _ TInt = TInt
@@ -193,6 +197,11 @@ subtype x _ = return (x, mempty)
 tracePrint :: (Show a, Monad m) => a -> m ()
 tracePrint x = traceShow x $ return ()
 
+annUnion :: [AnnVar] -> State Integer (AnnVar, Constrs)
+annUnion as = do
+    a <- freshAnnVar
+    return (a, S.fromList $ SuperVar a <$> as)
+
 ctaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, AnnVar, TySubst, Constrs)
 ctaW _ (Integer _) = (TInt,, mempty, mempty) <$> freshAnnVar
 ctaW _ (Bool _)    = (TBool,, mempty, mempty) <$> freshAnnVar
@@ -225,10 +234,8 @@ ctaW e (App t1 t2)  = do
   b <- freshAnnVar
   eff3 <- freshAnnVar
   let (th3, _) = unify (substTyVar th2 tau1) (TArrow tau2 b eff3 a)
-  -- (th3, _, c3) <- subUnify (substTyVar th2 tau1) (TArrow tau2 b a)
   let th = composeSubsts [th3, th2, th1]
-  eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3, SuperVar eff b]
+  (eff, c3) <- annUnion [eff1, eff2, eff3, b]
   return (substTyVar th3 a, eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (Let x t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
@@ -236,8 +243,7 @@ ctaW e (Let x t1 t2) = do
   let e1 = M.insert x (generalise e' tau1) e'
   (tau, eff2, th2, c2) <- ctaW e1 t2
   let th = composeSubst th2 th1
-  eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  (eff, c3) <- annUnion [eff1, eff2]
   return (tau, eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (ITE t1 t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
@@ -248,8 +254,7 @@ ctaW e (ITE t1 t2 t3) = do
   (th4, _, c4) <- subUnify (substTyVar th3 (substTyVar th2 tau1)) TBool
   (th5, t', c5) <- subUnify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
   let th = composeSubsts [th5, th4, th3, th2, th1]
-  eff <- freshAnnVar
-  let c6 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3]
+  (eff, c6) <- annUnion [eff1, eff2, eff3]
   return (t', eff, th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5, c6])
 ctaW e (Oper _ t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
@@ -257,16 +262,14 @@ ctaW e (Oper _ t1 t2) = do
   (th3, _, c3) <- subUnify (substTyVar th2 tau1) TInt
   (th4, _, c4) <- subUnify (substTyVar th3 tau2) TInt
   let th = composeSubsts [th4, th3, th2, th1]
-  eff <- freshAnnVar
-  let c5 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  (eff, c5) <- annUnion [eff1, eff2]
   return (TInt, eff, th, substTyAnns th $ S.unions [c1, c2, c3, c4, c5])
 ctaW e (Pair pi t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
   a <- freshAnnVar
   let th = composeSubst th2 th1
-  eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  (eff, c3) <- annUnion [eff1, eff2]
   return (TPair a (substTyVar th tau1) tau2, eff, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 <> c2 <> c3)
 ctaW e (PCase t1 x y t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
@@ -280,8 +283,7 @@ ctaW e (PCase t1 x y t2) = do
   let e2 = M.insert y (generalise e1 (substTyVar th a2)) e1
   (tau2, eff2, th3, c2) <- ctaW e2 t2
   let th' = composeSubst th3 th
-  eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
+  (eff, c3) <- annUnion [eff1, eff2]
   return (tau2, eff, th', substTyAnns th' $ c1 <> c2 <> c3)
 ctaW _ (Nil i) = do
   tau <- freshVar
@@ -311,8 +313,7 @@ ctaW e (LCase t1 hd tl t2 t3) = do
   (tau3, eff3, th4, c3) <- ctaW e t3
   (th5, tau4, c4) <- subUnify (substTyVar th4 $ substTyVar th tau2) tau3
   let th' = composeSubsts [th5, th3, th]
-  eff <- freshAnnVar
-  let c5 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3]
+  (eff, c5) <- annUnion [eff1, eff2, eff3]
   return (tau4, eff, th', substTyAnns th' $ c1 <> c2 <> c3 <> c4 <> c5)
 
 
