@@ -67,13 +67,38 @@ instance Show Expr where
   showsPrec context (PCase e1 x y e2) = showParen (context > 0) $
                                           showString "pcase "
                                           . showsPrec 1 e1
-                                          . showString " of "
+                                          . showString " of Pair"
                                           . showParen True (
                                           showString x
                                           . showString " , "
                                           . showString y)
                                           . showString " => "
                                           . shows e2
+  showsPrec _ (Nil pi)                = showString "Nil"
+                                          . showLabel pi
+  showsPrec _ (Cons pi x y)           = showString "Cons"
+                                          . showLabel pi
+                                          . showString " "
+                                          . showParen True
+                                          (
+                                          shows x
+                                          . showString " , "
+                                          . shows y)
+  showsPrec context (LCase e1 hd tl e2 e3) =
+                                        showParen (context > 0) $
+                                          showString "lcase "
+                                          . showsPrec 1 e1
+                                          . showString " of Cons"
+                                          . showParen True (
+                                          showString hd
+                                          . showString " , "
+                                          . showString tl)
+                                          . showString " => "
+                                          . showsPrec 1 e2
+                                          . showString " or "
+                                          . showsPrec 1 e3
+
+
 
 instance Show Op where
   show Add = "+"

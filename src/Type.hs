@@ -11,17 +11,17 @@ import Ast
 import Show
 import Data.Bifunctor
 import Data.Map as M
+import Data.List as L
 import Control.Monad.State
-import Data.List (intercalate)
 import Prelude hiding (pi)
-import Data.Maybe (fromMaybe)
+import Data.Graph
 
 newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId
 newtype AnnVar  = AnnVar Integer deriving (Eq, Ord, Show)
 newtype TyVar      = TyVar Integer deriving (Eq, Show, Ord)
 data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
-data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a a (Ty a) | TPair a (Ty a) (Ty a) deriving Show
+data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a a (Ty a) | TPair a (Ty a) (Ty a) | TList (Ty a) a deriving Show
 type TyEnv      = Map Name (TyScheme AnnVar)
 type TySubst    = (Map TyVar (Ty AnnVar), Map AnnVar AnnVar)
 
@@ -37,6 +37,7 @@ replaceTyVar _ TInt = TInt
 replaceTyVar _ TBool = TBool
 replaceTyVar f (TArrow t1 a b t2) = TArrow (replaceTyVar f t1) a b (replaceTyVar f t2)
 replaceTyVar f (TPair cs t1 t2) = TPair cs (replaceTyVar f t1) (replaceTyVar f t2)
+replaceTyVar f (TList t a) = TList (replaceTyVar f t) a
 
 substTyVar :: TySubst -> Ty AnnVar -> Ty AnnVar
 substTyVar s (FreeVar v) = findWithDefault (FreeVar v) v (fst s)
@@ -44,6 +45,7 @@ substTyVar _ TInt = TInt
 substTyVar _ TBool = TBool
 substTyVar s (TArrow t1 a b t2) = TArrow (substTyVar s t1) (findWithDefault a a (snd s)) (findWithDefault b b (snd s)) (substTyVar s t2)
 substTyVar s (TPair a t1 t2) = TPair (findWithDefault a a (snd s)) (substTyVar s t1) (substTyVar s t2)
+substTyVar s (TList t a) = TList (substTyVar s t) (findWithDefault a a (snd s))
 
 substTyScheme :: TySubst -> TyScheme AnnVar -> TyScheme AnnVar
 substTyScheme s (SType ty)     = SType $ substTyVar s ty
@@ -94,6 +96,12 @@ freeVars (TArrow t1 _ _ t2) = freeVars t1 <> freeVars t2
 freeVars (TPair _ t1 t2) = freeVars t1 <> freeVars t2
 freeVars _ = mempty
 
+freeAnnVars :: Ty AnnVar -> Set AnnVar
+freeAnnVars (TArrow _ a b _) = S.fromList [a, b]
+freeAnnVars (TPair a _ _) = S.singleton a
+freeAnnVars _ = mempty
+
+
 schemeFreeVars :: TyScheme a -> Set TyVar
 schemeFreeVars (SType t)     = freeVars t
 schemeFreeVars (Forall _ ts) = schemeFreeVars ts
@@ -129,6 +137,10 @@ unify (TArrow t1 a1 b1 t2) (TArrow t3 a2 b2 t4) = (composeSubsts [th2, th1, th],
     th = (mempty, M.fromList [(b1, b2), (a1, a2)])
     (th1, left)  = unify (substTyVar th t1) (substTyVar th t3)
     (th2, right) = unify (substTyVar th1 (substTyVar th t2)) (substTyVar th1 (substTyVar th t4))
+unify (TList t1 a1) (TList t2 a2) = (composeSubst th1 th, t3)
+  where
+    th = (mempty, M.singleton a1 a2)
+    (th1, t3) = unify (substTyVar th t1) (substTyVar th t2)
 unify (FreeVar a) t = (chk a t (M.singleton a t, mempty), t)
 unify t (FreeVar a) = (chk a t (M.singleton a t, mempty), t)
 unify a b = error ("cannot unify " ++ show a ++ " ~ " ++ show b)
@@ -140,7 +152,7 @@ subUnify a b = do
   (b', c2) <- subtype b Co
   let (s, t) = unify a' b'
   return (s, t, c1 <> c2)
-  
+
 data Variance = Co | Contra | Invariant deriving Eq
 op :: Variance -> Variance
 op Co = Contra
@@ -150,7 +162,7 @@ op Invariant = Invariant
 instance Semigroup Variance where
   a <> b
     | a == b    = a
-    | otherwise = Invariant    
+    | otherwise = Invariant
 
 variance :: Variance -> AnnVar -> AnnVar -> Constr
 variance Co     a b = SuperVar b a
@@ -172,7 +184,7 @@ subtype (TPair a t1 t2) v = do
 subtype x _ = return (x, mempty)
 
 tracePrint :: (Show a, Monad m) => a -> m ()
-tracePrint x = traceShow x $ return () 
+tracePrint x = traceShow x $ return ()
 
 ctaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, AnnVar, TySubst, Constrs)
 ctaW _ (Integer _) = (TInt,, mempty, mempty) <$> freshAnnVar
@@ -264,8 +276,37 @@ ctaW e (PCase t1 x y t2) = do
   eff <- freshAnnVar
   let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
   return (tau2, eff, th', substTyAnns th' $ c1 <> c2 <> c3)
-ctaW _ x = error $ "not implemented: " ++ show x 
-
+ctaW _ (Nil i) = do
+  tau <- freshVar
+  eff <- freshAnnVar
+  a <- freshAnnVar
+  return (TList tau a, eff, mempty, S.singleton (Super a (S.singleton $ FunId i)))
+ctaW e (Cons i t1 t2) = do
+  (tau1, eff1, th1, c1) <- ctaW e t1
+  (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
+  a <- freshAnnVar
+  (th3, tau3, c3) <- subUnify (substTyVar th2 $ TList tau1 a) tau2
+  let th = composeSubsts [th3, th2, th1]
+  a' <- freshAnnVar
+  eff <- freshAnnVar
+  let c4 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a, Super a' (S.singleton $ FunId i)]
+  return (TList tau3 a', eff, th, substTyAnns th $ c1 <> c2 <> c3 <> c4)
+ctaW e (LCase t1 hd tl t2 t3) = do
+  (tau1, eff1, th1, c1) <- ctaW e t1
+  tau <- freshVar
+  a <- freshAnnVar
+  let (th2, _) = unify (TList tau a) tau1
+  let th = composeSubst th2 th1
+  let e' = substEnv th e
+  let e1 = M.insert hd (generalise e' (substTyVar th tau)) e'
+  let e2 = M.insert tl (generalise e1 (substTyVar th tau1)) e1
+  (tau2, eff2, th3, c2) <- ctaW e2 t2
+  (tau3, eff3, th4, c3) <- ctaW e t3
+  (th5, tau4, c4) <- subUnify (substTyVar th4 $ substTyVar th tau2) tau3
+  let th' = composeSubsts [th5, th3, th]
+  eff <- freshAnnVar
+  let c5 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3]
+  return (tau4, eff, th', substTyAnns th' $ c1 <> c2 <> c3 <> c4 <> c5)
 
 
 ctaW' :: Expr -> ((Ty AnnVar, AnnVar, TySubst, Constrs), Integer)
@@ -274,50 +315,61 @@ ctaW' x = flip runState 0 $ ctaW mempty x
 type Polarity = Maybe Variance
 
 polarity :: Ty AnnVar -> AnnVar -> Variance -> Polarity
-polarity (TArrow t1 a b t2) c v 
+polarity (TArrow t1 a b t2) c v
   | a == b || a == c = Just v
   | otherwise        = polarity t1 c (op v) <> polarity t2 c v
-polarity (TPair a t1 t2) b v 
+polarity (TPair a t1 t2) b v
   | a == b    = Just v
   | otherwise = polarity t1 b v <> polarity t2 b v
 polarity _ _ _ = Nothing
 
-solveConstraint :: Constrs -> AnnVar -> Ann
-solveConstraint cs a = S.unions $ S.map g $ S.filter f cs
+
+toGraph :: [AnnVar] -> Constrs -> [(AnnVar, AnnVar, [AnnVar])]
+toGraph as cs = [(k, k, v) | (k, v) <- M.toList es]
   where
-    f (Super b _)    = a == b
-    f (SuperVar b _) = a == b
-    
-    g (Super _ s)    = s
-    g (SuperVar _ v) = solveConstraint cs v -- this loops if a >= b and b >= a, we could solve this, but why?
-                                            -- (only subeffecting produces SuperVar)
-solveConstraint' :: Ty AnnVar -> Constrs -> Ann -> AnnVar -> Ann
-solveConstraint' t cs top a = elts <> rels
+    es = L.foldr collect2 (S.foldr collect mempty cs) as
+
+    addEdge b (Just c) = Just (b:c)
+    addEdge b Nothing  = Just [b]
+
+    collect (SuperVar a b) = M.alter (addEdge b) a
+    collect _ = id
+
+    collect2 a = M.alter (addEdge a) a
+
+findSCC :: Eq node => node -> [[node]] -> [node]
+findSCC x xss = head $ L.filter (x `elem`) xss
+
+solveAt :: Constrs -> AnnVar -> Ann
+solveAt cs a = S.unions $ S.map g $ S.filter f cs
   where
-    p = fromMaybe (error $ "cannot solve annotation variable " ++ show a ++ " which is absent in type") (polarity t a Co)
-    
-    isElt (Super b _) = a == b
-    isElt _           = False
+    f (Super b _) = a == b
+    f _           = False
 
-    isRel (SuperVar b c) 
-      | p == Co     = a == b
-      | p == Contra = a == c
-      | otherwise   = error $ "cannot solve invariant annotation variable " ++ show a
-    isRel _ = False
+    g (Super _ s) = s
+    g _           = undefined
 
-    extract (Super _ s)    = s
-    extract (SuperVar b c) 
-      | p == Co     = solveConstraint' t cs top c
-      | p == Contra = solveConstraint' t cs top b 
-      | otherwise   = error $ "cannot solve invariant annotation variable " ++ show a
-      
-    sets = S.map extract $ S.filter isRel cs
+solveBelow :: Constrs -> [[AnnVar]] -> AnnVar -> Ann
+solveBelow cs ss a = S.unions $ S.map (solveSCC cs ss) h
+  where
+    s = findSCC a ss
 
-    elts = S.unions $ S.map extract $ S.filter isElt cs
-    rels
-      | p == Co     = S.unions sets
-      | p == Contra = S.foldl' S.intersection top sets
-      | otherwise   = error $ "cannot solve invariant annotation variable " ++ show a
+    f (SuperVar b c) = a == b && notElem c s
+    f _              = False
+
+    g (SuperVar _ b) = S.insert (findSCC b ss)
+    g _              = undefined
+
+    h = S.foldr g mempty $ S.filter f cs
+
+solveSCC :: Constrs -> [[AnnVar]] -> [AnnVar] -> Ann
+solveSCC cs ss s = S.unions $ (solveAt cs <$> s) ++ (solveBelow cs ss <$> s)
+
+solveConstraints :: Constrs -> [AnnVar] -> AnnVar -> Ann
+solveConstraints cs as a = solveSCC cs ss (findSCC a ss)
+  where
+    ss = flattenSCC <$> stronglyConnComp (toGraph as cs)
+
 
 labels :: Expr -> Ann
 labels (Fn i _ x)           = S.insert (FunId i) $ labels x
@@ -333,18 +385,27 @@ labels (Nil i)              = S.singleton (FunId i)
 labels (LCase x1 _ _ x2 x3) = labels x1 <> labels x2 <> labels x3
 labels _ = mempty
 
+constraintVars :: Constrs -> Set AnnVar
+constraintVars = S.foldr h mempty
+  where
+    h (Super a _)    = S.insert a
+    h (SuperVar a b) = S.insert a . S.insert b
+
 typeOf :: Expr -> (TyScheme Ann, Ann)
 typeOf x = case fst $ ctaW' x of
-  (t, eff, _, cs) -> --traceShow cs $ traceShow s $ traceShow t $ traceShow eff 
-                (generalise mempty $ replaceAnnVar (solveConstraint cs) t
-                , solveConstraint cs eff)
+  (t, eff, _, cs) -> --traceShow cs $ traceShow s $ traceShow t $ traceShow eff
+                (generalise mempty $ replaceAnnVar (solveConstraints cs as) t
+                , solveConstraints cs as eff)
+                  where
+                    as = S.toList $ freeAnnVars t <> constraintVars cs
 
 replaceAnnVar :: (AnnVar -> Ann) -> Ty AnnVar -> Ty Ann
 replaceAnnVar f (TArrow t1 a b t2) = TArrow (replaceAnnVar f t1) (f a) (f b) (replaceAnnVar f t2)
 replaceAnnVar _ (FreeVar tv) = FreeVar tv
 replaceAnnVar _ TInt = TInt
 replaceAnnVar _ TBool = TBool
-replaceAnnVar f (TPair a t1 t2) = TPair (f a) (replaceAnnVar f t1) (replaceAnnVar f t2) 
+replaceAnnVar f (TPair a t1 t2) = TPair (f a) (replaceAnnVar f t1) (replaceAnnVar f t2)
+replaceAnnVar f (TList t a) = TList (replaceAnnVar f t) (f a)
 
 
 pretty :: Pretty a => a -> String
@@ -374,6 +435,7 @@ instance Pretty a => Pretty (Ty a) where
     where
       x =  pretty' True t1 ++ " -" ++ pretty' False a ++ ";" ++ pretty' False a' ++ "-> " ++ pretty' False t2
   pretty' _ (TPair a t1 t2) = "pair" ++ pretty' False a ++ "(" ++ pretty' False t1 ++ " , " ++ pretty' False t2 ++ ")"
+  pretty' _ (TList t a) = pretty' True t ++ " list" ++ pretty' False a
 
 instance Pretty FunId where
   pretty' _ (FunId n) = show n
