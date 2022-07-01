@@ -32,19 +32,11 @@ type Constrs = Set Constr
 data Id         = Id Name Integer
 
 
-replaceTyVar :: (TyVar -> TyVar) -> Ty a -> Ty a
-replaceTyVar f (FreeVar v) = FreeVar $ f v
-replaceTyVar _ TInt = TInt
-replaceTyVar _ TBool = TBool
-replaceTyVar f (TArrow t1 a b t2) = TArrow (replaceTyVar f t1) a b (replaceTyVar f t2)
-replaceTyVar f (TPair cs t1 t2) = TPair cs (replaceTyVar f t1) (replaceTyVar f t2)
-replaceTyVar f (TList t a) = TList (replaceTyVar f t) a
-
 substTyVar :: TySubst -> Ty AnnVar -> Ty AnnVar
 substTyVar s (FreeVar v) = findWithDefault (FreeVar v) v (fst s)
 substTyVar _ TInt = TInt
 substTyVar _ TBool = TBool
-substTyVar s (TArrow t1 a b t2) = TArrow (substTyVar s t1) (findWithDefault a a (snd s)) (findWithDefault b b (snd s)) (substTyVar s t2)
+substTyVar s (TArrow t1 a b t2) = TArrow (substTyVar s t1) (substTyAnn s a) (findWithDefault b b (snd s)) (substTyVar s t2)
 substTyVar s (TPair a t1 t2) = TPair (findWithDefault a a (snd s)) (substTyVar s t1) (substTyVar s t2)
 substTyVar s (TList t a) = TList (substTyVar s t) (findWithDefault a a (snd s))
 
@@ -71,14 +63,6 @@ composeSubst s''@(s, s') (t, t') = (fmap (substTyVar s'') t `M.union` s, fmap (s
 composeSubsts :: [TySubst] -> TySubst
 composeSubsts = Prelude.foldr composeSubst mempty
 
-freshen :: Integer -> TyVar -> TyVar -> TyVar
-freshen i (TyVar j) x@(TyVar k)
-  | j == k    = TyVar i
-  | otherwise         = x
-
-freshIndex :: State Integer Integer
-freshIndex = state $ \s -> (s, s + 1)
-
 freshVar :: State Integer (Ty a)
 freshVar = state $ \s -> (FreeVar $ TyVar s, s + 1)
 
@@ -88,8 +72,8 @@ freshAnnVar = state $ \s -> (AnnVar s, s + 1)
 cfaInstantiate :: TyScheme a -> State Integer (Ty a)
 cfaInstantiate (SType ty)    = return ty
 cfaInstantiate (Forall v ts) = do
-  i <- freshIndex
-  replaceTyVar (freshen i v) <$> cfaInstantiate ts
+  vFresh <- freshVar
+  substTyVar ([(v, vFresh)]) <$> cfaInstantiate ts
 
 freeVars :: Ty a -> Set TyVar
 freeVars (FreeVar v) = S.singleton v
@@ -98,19 +82,12 @@ freeVars (TPair _ t1 t2) = freeVars t1 <> freeVars t2
 freeVars (TList t _) = freeVars t
 freeVars _ = mempty
 
-freeAnnVars :: Ty AnnVar -> Set AnnVar
-freeAnnVars (TArrow _ a b _) = S.fromList [a, b]
-freeAnnVars (TPair a _ _) = S.singleton a
-freeAnnVars (TList _ a) = S.singleton a
-freeAnnVars _ = mempty
-
-
 schemeFreeVars :: TyScheme a -> Set TyVar
 schemeFreeVars (SType t)     = freeVars t
 schemeFreeVars (Forall _ ts) = schemeFreeVars ts
 
 envFreeVars :: TyEnv -> Set TyVar
-envFreeVars = M.foldr (\x y -> schemeFreeVars x <> y) mempty
+envFreeVars = foldMap schemeFreeVars
 
 generalise :: TyEnv -> Ty a -> TyScheme a
 generalise e t = S.foldr Forall (SType t) (freeVars t `S.difference` envFreeVars e)
@@ -156,16 +133,11 @@ subUnify a b = do
   let (s, t) = unify a' b'
   return (s, t, c1 <> c2)
 
-data Variance = Co | Contra | Invariant deriving Eq
+data Variance = Co | Contra deriving Eq
 op :: Variance -> Variance
 op Co = Contra
 op Contra = Co
 op Invariant = Invariant
-
-instance Semigroup Variance where
-  a <> b
-    | a == b    = a
-    | otherwise = Invariant
 
 variance :: Variance -> AnnVar -> AnnVar -> Constr
 variance Co     a b = SuperVar b a
@@ -213,11 +185,11 @@ ctaW e (Fun pi f x t) = do
   let e' = M.fromList [(f, SType $ TArrow a1 b c a2), (x, SType a1)] `M.union` e
   (tau, eff, th1, c1) <- ctaW e' t
   let (th2, _) = unify tau (substTyVar th1 a2)
-  let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyAnn th2 (substTyAnn th1 eff)) (substTyVar th2 tau)
-  let c3 = S.map (substTyAnnC th2) (c1 <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi)))
-  let th = composeSubst th2 th1
+  let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyAnn th2 eff) (substTyVar th2 tau)
+  let c3 = substTyAnns th2 c1 <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi))
+  let th = composeSubst th2 th1 -- move up and use
   o <- freshAnnVar
-  return (tau', o, th, substTyAnns th c3)
+  return (tau', o, th <> [c == eff], c3)
 ctaW e (App t1 t2)  = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
@@ -228,17 +200,16 @@ ctaW e (App t1 t2)  = do
   -- (th3, _, c3) <- subUnify (substTyVar th2 tau1) (TArrow tau2 b a)
   let th = composeSubsts [th3, th2, th1]
   eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3, SuperVar eff b]
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3, SuperVar eff b] -- overleaf
   return (substTyVar th3 a, eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (Let x t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   let e' = substEnv th1 e
   let e1 = M.insert x (generalise e' tau1) e'
   (tau, eff2, th2, c2) <- ctaW e1 t2
-  let th = composeSubst th2 th1
   eff <- freshAnnVar
   let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
-  return (tau, eff, th, substTyAnns th $ c1 <> c2 <> c3)
+  return (tau, eff, composeSubst th2 th1, substTyAnns th2 c1 <> c2 <> c3)
 ctaW e (ITE t1 t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   let e1 = substEnv th1 e
@@ -246,7 +217,7 @@ ctaW e (ITE t1 t2 t3) = do
   let e2 = substEnv th2 e1
   (tau3, eff3, th3, c3) <- ctaW e2 t3
   (th4, _, c4) <- subUnify (substTyVar th3 (substTyVar th2 tau1)) TBool
-  (th5, t', c5) <- subUnify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3)
+  (th5, t', c5) <- subUnify (substTyVar th4 (substTyVar th3 tau2)) (substTyVar th4 tau3) -- embrace the <>
   let th = composeSubsts [th5, th4, th3, th2, th1]
   eff <- freshAnnVar
   let c6 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3]
@@ -267,7 +238,7 @@ ctaW e (Pair pi t1 t2) = do
   let th = composeSubst th2 th1
   eff <- freshAnnVar
   let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2]
-  return (TPair a (substTyVar th tau1) tau2, eff, th, substTyAnns th $ S.insert (Super (substTyAnn th a) $ S.singleton (FunId pi)) $ c1 <> c2 <> c3)
+  return (TPair a (substTyVar th2 tau1) tau2, eff, th, substTyAnns th2 $ S.insert (Super a $ S.singleton (FunId pi)) $ c1 <> c2 <> c3)
 ctaW e (PCase t1 x y t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   a1 <- freshVar
@@ -292,12 +263,11 @@ ctaW e (Cons i t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
   a <- freshAnnVar
-  let (th3, _) = unify (substTyVar th2 $ TList tau1 a) tau2
+  let (th3, _) = subUnify (TList (substTyVar th2 tau1) a) tau2
   let th = composeSubsts [th3, th2, th1]
-  a' <- freshAnnVar
   eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a, Super a' (S.singleton $ FunId i)]
-  return (TList (substTyVar th tau1) a', eff, th, substTyAnns th $ c1 <> c2 <> c3)
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, Super _a (S.singleton $ FunId i)]
+  return (_, eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (LCase t1 hd tl t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   tau <- freshVar
@@ -309,7 +279,7 @@ ctaW e (LCase t1 hd tl t2 t3) = do
   let e2 = M.insert tl (generalise e1 (substTyVar th tau1)) e1
   (tau2, eff2, th3, c2) <- ctaW e2 t2
   (tau3, eff3, th4, c3) <- ctaW e t3
-  (th5, tau4, c4) <- subUnify (substTyVar th4 $ substTyVar th tau2) tau3
+  (th5, tau4, c4) <- subUnify (substTyVar th4 tau2) tau3
   let th' = composeSubsts [th5, th3, th]
   eff <- freshAnnVar
   let c5 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar eff eff3]
@@ -318,18 +288,6 @@ ctaW e (LCase t1 hd tl t2 t3) = do
 
 ctaW' :: Expr -> ((Ty AnnVar, AnnVar, TySubst, Constrs), Integer)
 ctaW' x = flip runState 0 $ ctaW mempty x
-
-type Polarity = Maybe Variance
-
-polarity :: Ty AnnVar -> AnnVar -> Variance -> Polarity
-polarity (TArrow t1 a b t2) c v
-  | a == b || a == c = Just v
-  | otherwise        = polarity t1 c (op v) <> polarity t2 c v
-polarity (TPair a t1 t2) b v
-  | a == b    = Just v
-  | otherwise = polarity t1 b v <> polarity t2 b v
-polarity _ _ _ = Nothing
-
 
 toGraph :: Constrs -> [(AnnVar, AnnVar, [AnnVar])]
 toGraph cs = [(k, k, v) | (k, v) <- M.toList es]
@@ -346,26 +304,33 @@ findSCC :: Eq node => node -> [[node]] -> [node]
 findSCC x xss = fromMaybe [x] $ find (x `elem`) xss
 
 solveAt :: Constrs -> AnnVar -> Ann
-solveAt cs a = S.unions $ S.map g $ S.filter f cs
+solveAt cs a = foldMap g cs
   where
-    f (Super b _) = a == b
-    f _           = False
-
-    g (Super _ s) = s
-    g _           = undefined
+    g (Super b s) | a == b = s
+    g _           = mempty
 
 solveBelow :: Constrs -> [[AnnVar]] -> AnnVar -> Ann
-solveBelow cs ss a = S.unions $ S.map (solveSCC cs ss) h
+solveBelow cs ss a = foldMap (solveSCC cs ss) h
   where
     s = findSCC a ss
 
-    f (SuperVar b c) = a == b && notElem c s
-    f _              = False
+    f (SuperVar b c) | a == b && notElem c s = Just (findSCC c ss)
+    f _              = Nothing
 
-    g (SuperVar _ b) = S.insert (findSCC b ss)
-    g _              = undefined
-
-    h = S.foldr g mempty $ S.filter f cs
+    h = S.mapMaybe g cs
+    -- potential alternatively
+    below =
+      -- Set AnnVar
+      S.fromList $
+      -- [AnnVar]
+      fold $
+      -- [[AnnVar]]
+      fst $
+      -- ([[AnnVar]], [[AnnVar]])
+      break (a `elem`) ss
+    g (Super b s) | b `S.member` below = S
+    g _ = mempty
+    result = foldMap g cs
 
 solveSCC :: Constrs -> [[AnnVar]] -> [AnnVar] -> Ann
 solveSCC cs ss s = S.unions $ (solveAt cs <$> s) ++ (solveBelow cs ss <$> s)
