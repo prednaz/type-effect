@@ -1,7 +1,6 @@
 -- (C) 2013-14 Pepijn Kokke & Wout Elsinghorst
 -- Modifications made Jurriaan Hage & Ivo Gabe de Wolff
 
-{-# language TupleSections #-}
 
 module Main
   ( main
@@ -12,6 +11,7 @@ import Ast
 import Show ()
 import Type
 import Parsing
+import Pretty
 
 import Path (parseRelDir, fileExtension, toFilePath, splitExtension, filename)
 import Path.IO (listDir)
@@ -30,8 +30,8 @@ main = do
     _ -> do
       putStrLn "Expected name of example program"
       putStrLn "Usage: stack run -- name"
- 
-run :: String -> IO ()   
+
+run :: String -> IO ()
 run name = do
   p <- parse name
   putStrLn "Expression:"

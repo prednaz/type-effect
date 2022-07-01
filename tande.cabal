@@ -29,6 +29,7 @@ library
       Parsing
       Show
       Type
+      Pretty
   other-modules:
       Paths_tande
   hs-source-dirs:
