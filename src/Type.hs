@@ -146,8 +146,11 @@ chk' :: TyVar -> Ty a -> TySubst -> TySubst
 chk' a (FreeVar b) s
   | a == b    = error $ show a ++ " matches " ++ show b ++ " in chk"
   | otherwise = s
-chk' a (TArrow t1 _ _ t2) s = chk a t1 (chk a t2 s)
-chk' _ _ s = s
+chk' a (TArrow t1 _ _ t2) s = chk' a t1 (chk' a t2 s)
+chk' a (TPair _ t1 t2) s = chk' a t1 (chk' a t2 s)
+chk' a (TList t1 _) s = chk' a t1 s
+chk' _ TInt s = s
+chk' _ TBool s = s
 
 -- | Unify two types, returning the substition and unified type.
 unify :: Ty AnnVar -> Ty AnnVar -> (TySubst, Ty AnnVar)
