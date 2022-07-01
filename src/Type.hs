@@ -29,7 +29,8 @@ data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a a (Ty a) | TPai
 type TyEnv      = Map Name (TyScheme AnnVar)
 data TySubst    = TySubst (Map TyVar (Ty AnnVar)) (Map AnnVar AnnVar)
 
-data Constr = Super AnnVar Ann | SuperVar AnnVar AnnVar deriving (Eq, Ord, Show)
+-- Ni a pi represents pi in a
+data Constr = Ni AnnVar FunId | SuperVar AnnVar AnnVar deriving (Eq, Ord, Show)
 type Constrs = Set Constr
 
 data Id         = Id Name Integer
@@ -68,7 +69,7 @@ instance Substitute AnnVar where
   subst (TySubst _ r) v = findWithDefault v v r
 
 instance Substitute Constr where
-  subst s (Super v t) = Super (subst s v) t
+  subst s (Ni v t) = Ni (subst s v) t
   subst s (SuperVar a b) = SuperVar (subst s a) (subst s b)
 
 instance (Ord a, Substitute a) => Substitute (Set a) where
@@ -177,6 +178,9 @@ annUnion as = do
     a <- freshAnnVar
     return (a, S.fromList $ SuperVar a <$> as)
 
+annNi :: AnnVar -> Pi -> Constrs -> Constrs
+annNi a pi = S.insert (Ni a (FunId pi))
+
 genIn :: Name -> Ty AnnVar -> TyEnv -> TyEnv
 genIn x t e = M.insert x (generalise e t) e
 
@@ -191,7 +195,7 @@ ctaW e (Fn pi x t) = do
   (tau, eff, th, c) <- ctaW (M.insert x (SType a1) e) t
   b <- freshAnnVar
   o <- freshAnnVar
-  return (TArrow (subst th a1) b eff tau, o, th, c <> S.singleton (Super b (S.singleton $ FunId pi)))
+  return (TArrow (subst th a1) b eff tau, o, th, annNi b pi c)
 ctaW e (Fun pi f x t) = do
   a1 <- freshVar
   a2 <- freshVar
@@ -202,7 +206,7 @@ ctaW e (Fun pi f x t) = do
   let (th2, _) = unify tau (subst th1 a2)
   let th = th2 <> th1 <> TySubst mempty (M.singleton c eff)
   let tau' = TArrow (subst th a1) (subst th b) (subst th eff) (subst th tau)
-  let c3 = subst th (c1 <> S.singleton (Super (subst th b) (S.singleton $ FunId pi)))
+  let c3 = subst th (annNi (subst th b) pi c1)
   o <- freshAnnVar
   return (tau', o, th, subst th c3)
 ctaW e (App t1 t2)  = do
@@ -247,7 +251,7 @@ ctaW e (Pair pi t1 t2) = do
   a <- freshAnnVar
   let th = th2 <> th1
   (eff, c3) <- annUnion [eff1, eff2]
-  return (TPair a (subst th2 tau1) tau2, eff, th, subst th2 $ S.insert (Super (subst th a) $ S.singleton (FunId pi)) $ c1 <> c2 <> c3)
+  return (TPair a (subst th2 tau1) tau2, eff, th, subst th2 $ annNi (subst th a) pi $ c1 <> c2 <> c3)
 ctaW e (PCase t1 x y t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   a1 <- freshVar
@@ -264,7 +268,7 @@ ctaW _ (Nil i) = do
   tau <- freshVar
   eff <- freshAnnVar
   a <- freshAnnVar
-  return (TList tau a, eff, mempty, S.singleton (Super a (S.singleton $ FunId i)))
+  return (TList tau a, eff, mempty, annNi a i mempty)
 ctaW e (Cons i t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (subst th1 e) t2
@@ -273,7 +277,7 @@ ctaW e (Cons i t1 t2) = do
   let th = fold [th3, th2, th1]
   a' <- freshAnnVar
   eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a, Super a' (S.singleton $ FunId i)]
+  let c3 = annNi a' i $ S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a]
   return (TList (subst th tau1) a', eff, th, subst th $ c1 <> c2 <> c3)
 ctaW e (LCase t1 hd tl t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
@@ -309,7 +313,7 @@ findSCC x xss = fromMaybe [x] $ find (x `elem`) xss
 solveAt :: Constrs -> AnnVar -> Ann
 solveAt cs a = foldMap g cs
   where
-    g (Super b s) | a == b = s
+    g (Ni b s) | a == b = S.singleton s
     g _           = mempty
 
 solveBelow :: Constrs -> [[AnnVar]] -> AnnVar -> Ann
