@@ -5,7 +5,7 @@
 module Type where
 
 
-import Data.List ( intercalate, find )
+import Data.List ( intercalate )
 import Data.Map ( findWithDefault, Map )
 import Data.Set ( Set )
 import qualified Data.Map as M
@@ -315,41 +315,39 @@ toGraph cs = [(k, k, v) | (k, v) <- M.toList es]
     collect (SuperVar a b) = M.alter (addEdge b) a
     collect _ = id
 
-findSCC :: Eq node => node -> [[node]] -> [node]
-findSCC x xss = fromMaybe [x] $ find (x `elem`) xss
-
-solveAt :: Constrs -> AnnVar -> Ann
-solveAt cs a = foldMap g cs
+deloop :: Constrs -> Constrs
+deloop = S.fromList . mapMaybe f . S.toList
   where
-    g (Ni b s) | a == b = S.singleton s
-    g _           = mempty
+    f x@(SuperVar a b)
+      | a == b    = Nothing
+      | otherwise = Just x
+    f x = Just x
 
-solveBelow :: Constrs -> [[AnnVar]] -> AnnVar -> Ann
-solveBelow cs ss a = foldMap (solveSCC cs ss) h
-  where
-    s = findSCC a ss
-
-    f (SuperVar b c) = a == b && notElem c s
-    f _              = False
-
-    g (SuperVar _ b) = S.insert (findSCC b ss)
-    g _              = undefined
-
-    h = S.foldr g mempty $ S.filter f cs
-
-solveSCC :: Constrs -> [[AnnVar]] -> [AnnVar] -> Ann
-solveSCC cs ss s = S.unions $ (solveAt cs <$> s) ++ (solveBelow cs ss <$> s)
-
-solveConstraints :: Constrs -> AnnVar -> Ann
-solveConstraints cs a = solveSCC cs ss (findSCC a ss)
+simplify :: Constrs -> (TySubst, Constrs)
+simplify cs = (s, cs')
   where
     ss = flattenSCC <$> stronglyConnComp (toGraph cs)
+    f x = TySubst mempty $ M.fromList [(y, head x) | y <- tail x]
+    s = foldMap f ss
+    cs' = deloop $ subst s cs
+
+solveConstraints :: Constrs -> AnnVar -> Ann
+solveConstraints cs a = S.unions $ S.map g $ S.filter f cs
+  where
+    f (Ni b _)       = a == b
+    f (SuperVar b _) = a == b
+    
+    g (Ni _ s)       = S.singleton s
+    g (SuperVar _ v) = solveConstraints cs v
 
 typeOf :: Expr -> (TyScheme Ann, Ann)
 typeOf x = case fst $ ctaW' x of
   (t, eff, _, cs) -> --traceShow cs $ traceShow s $ traceShow t $ traceShow eff
-                (generalise mempty $ replaceAnnVar (solveConstraints cs) t
-                , solveConstraints cs eff)
+                (generalise mempty $ replaceAnnVar (solveConstraints cs') t'
+                , solveConstraints cs' eff)
+    where
+      (s', cs') = simplify cs
+      t' = subst s' t
 
 replaceAnnVar :: (AnnVar -> Ann) -> Ty AnnVar -> Ty Ann
 replaceAnnVar f (TArrow t1 a b t2) = TArrow (replaceAnnVar f t1) (f a) (f b) (replaceAnnVar f t2)
