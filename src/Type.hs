@@ -25,29 +25,49 @@ newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId
 newtype AnnVar  = AnnVar Integer deriving (Eq, Ord, Show)
 newtype TyVar   = TyVar Integer deriving (Eq, Show, Ord)
-data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
+-- | A @Ty a@ represents a type with type annotations of type @a@.
+-- A @TArrow t1 a b t2@ is the @t1 -> t2@ function type, which may have been defined at program points in @a@, and may call functions defined at points in @b@.
+-- The @TPair@ and @TList@ constructors respectively represent pairs and lists, where the @a@ annotation contains all locations they could have been created.
 data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a a (Ty a) | TPair a (Ty a) (Ty a) | TList (Ty a) a deriving Show
+data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
 type TyEnv      = Map Name (TyScheme AnnVar)
+-- | A @TySubst@ represents the composite substitution from type variables to types, and annotation variables to annotation variables.
 data TySubst    = TySubst (Map TyVar (Ty AnnVar)) (Map AnnVar AnnVar)
 
--- Ni a pi represents pi in a
-data Constr = Ni AnnVar FunId | SuperVar AnnVar AnnVar deriving (Eq, Ord, Show)
+-- | A @Constr@ represents a relation between an annotation variable and either another variable, or a program point.
+-- @Ni a pi@ expresses that @pi@ is in @a@, and @Super a b@ indicates that @a@ contains @b@.
+data Constr = Ni AnnVar FunId | Super AnnVar AnnVar deriving (Eq, Ord, Show)
 type Constrs = Set Constr
 
-data Id         = Id Name Integer
-
-
--- substitution composition semigroup
 instance Semigroup TySubst where
   s''@(TySubst s s') <> (TySubst t t') = TySubst (fmap (subst s'') t `M.union` s) (fmap (subst s'') t' `M.union` s')
 
+-- | The @TySubst@ monoid has multiplication as substitution composition,
+-- satisfying @subst (s2 <> s1) x = subst s2 $ subst s1 x@.
 instance Monoid TySubst where
   mempty = TySubst mempty mempty
+
+{- | @Substitute a@ states that for each @s :: TySubst@, there is a meaningful substitution function @subst s :: a -> a@.
+In particular @subst@ should obey the identity laws
+
+@subst mempty = id@
+
+@subst (TySubst (M.singleton a (FreeVar a)) mempty) = id@
+
+@subst (TySubst mempty (M.singleton a a)) = id@
+
+and idempotence
+
+@subst a . subst a = subst a@
+
+(We could narrow down the description further with alpha-equivalence lemmas (e.g. injective substitutions are bijections, and preserve alpha-equivalence both ways),
+but this is left as an exercise to the reader.)
+-}
 
 class Substitute a where
   subst :: TySubst -> a -> a
 
-
+-- | @substitute x s@ is the base case for most substitutions, replacing @x@ with its substitution if it is in @s@, and returning @x@ otherwise.
 substitute :: Ord a => a -> Map a a -> a
 substitute a = findWithDefault a a -- do we dare use @join findWithDefault@ here
 
@@ -59,8 +79,10 @@ instance Substitute (Ty AnnVar) where
   subst s@(TySubst _ r) (TPair a t1 t2) = TPair (substitute a r) (subst s t1) (subst s t2)
   subst s@(TySubst _ r) (TList t a) = TList (subst s t) (substitute a r)
 
+-- | Notably, the @TyScheme@ instance is the only substitution which alters the substition as it is passed down,
+-- removing substitutions on variables which are bound to quantifiers.
 instance Substitute (TyScheme AnnVar) where
-  subst s (SType ty)     = SType $ subst s ty
+  subst s (SType ty)                 = SType $ subst s ty
   subst (TySubst l r) (Forall ty ts) = Forall ty $ subst (TySubst (M.delete ty l) r) ts
 
 instance Substitute TyEnv where
@@ -70,18 +92,21 @@ instance Substitute AnnVar where
   subst (TySubst _ r) v = substitute v r
 
 instance Substitute Constr where
-  subst s (Ni v t) = Ni (subst s v) t
-  subst s (SuperVar a b) = SuperVar (subst s a) (subst s b)
+  subst s (Ni v t)    = Ni (subst s v) t
+  subst s (Super a b) = Super (subst s a) (subst s b)
 
 instance (Ord a, Substitute a) => Substitute (Set a) where
   subst s = S.map (subst s)
 
+-- | Create a fresh type variable.
 freshVar :: State Integer (Ty a)
 freshVar = state $ \s -> (FreeVar $ TyVar s, s + 1)
 
+-- | Create a fresh annotation variable.
 freshAnnVar :: State Integer AnnVar
 freshAnnVar = state $ \s -> (AnnVar s, s + 1)
 
+-- | Instatiate a type scheme to a type by replacing all bound variables with fresh ones.
 cfaInstantiate :: TyScheme AnnVar -> State Integer (Ty AnnVar)
 cfaInstantiate (SType ty)    = return ty
 cfaInstantiate (Forall v ts) = do
@@ -97,18 +122,26 @@ freeVars _ = mempty
 
 schemeFreeVars :: TyScheme a -> Set TyVar
 schemeFreeVars (SType t)     = freeVars t
-schemeFreeVars (Forall _ ts) = schemeFreeVars ts
+schemeFreeVars (Forall t ts) = S.delete t $ schemeFreeVars ts
 
 envFreeVars :: TyEnv -> Set TyVar
 envFreeVars = foldMap schemeFreeVars
 
+-- | Generalise a type to a type scheme by quantifying all variables which appear freely in the type and are unbound in the environment.
 generalise :: TyEnv -> Ty a -> TyScheme a
 generalise e t = S.foldr Forall (SType t) (freeVars t `S.difference` envFreeVars e)
 
+-- | Check whether the given type variable and type are unifiable.
+-- This wrapper for @chk'@ ensures that @a@ unifies with @FreeVar a@,
+-- while this would not unify after stripping of a type constructor, which would 
+-- create an infinite type.
 chk :: TyVar -> Ty a -> TySubst -> TySubst
 chk _ (FreeVar _) = id
 chk a b           = chk' a b
 
+-- | Check whether the given type variable and type are unifiable.
+-- Note that @a@ cannot unify with @FreeVar a@ here, since this would indicate
+-- the overall type becomes infinite.
 chk' :: TyVar -> Ty a -> TySubst -> TySubst
 chk' a (FreeVar b) s
   | a == b    = error $ show a ++ " matches " ++ show b ++ " in chk"
@@ -116,6 +149,7 @@ chk' a (FreeVar b) s
 chk' a (TArrow t1 _ _ t2) s = chk a t1 (chk a t2 s)
 chk' _ _ s = s
 
+-- | Unify two types, returning the substition and unified type.
 unify :: Ty AnnVar -> Ty AnnVar -> (TySubst, Ty AnnVar)
 unify TInt TInt   = (mempty, TInt)
 unify TBool TBool = (mempty, TBool)
@@ -137,6 +171,7 @@ unify (FreeVar a) t = (chk a t (TySubst (M.singleton a t) mempty), t)
 unify t (FreeVar a) = (chk a t (TySubst (M.singleton a t) mempty), t)
 unify a b = error ("cannot unify " ++ show a ++ " ~ " ++ show b)
 
+-- | Unify the subtypes of the argument types.
 subUnify :: Ty AnnVar -> Ty AnnVar -> State Integer (TySubst, Ty AnnVar, Constrs)
 subUnify a b = do
   (a', c1) <- subtype a Co
@@ -144,15 +179,23 @@ subUnify a b = do
   let (s, t) = unify a' b'
   return (s, t, c1 <> c2)
 
+-- | A @Variance@ tracks the polarity of locations in types.
+-- For an arrow @t1 -> t2@ in positive position, @t1@ is negative, and vice versa.
 data Variance = Co | Contra deriving Eq
+
 op :: Variance -> Variance
 op Co = Contra
 op Contra = Co
 
+-- | If @a@ and @b@ occur in the same location in @t1@ and @t2@ respectively,
+-- return the necessary constraint to maintain @t1 <= t2@.
+-- This means that if @a@ is covariant or positive, we return @a <= b@,
+-- and @b <= a@ if it is contravariant or negative.
 variance :: Variance -> AnnVar -> AnnVar -> Constr
-variance Co     a b = SuperVar b a
-variance Contra a b = SuperVar a b
+variance Co     a b = Super b a
+variance Contra a b = Super a b
 
+-- | Create a subtype of the given type.
 subtype :: Ty AnnVar -> Variance -> State Integer (Ty AnnVar, Constrs)
 subtype (TArrow t1 a b t2) v = do
   (t1', c1) <- subtype t1 (op v)
@@ -174,17 +217,21 @@ subtype x _ = return (x, mempty)
 tracePrint :: (Show a, Monad m) => a -> m ()
 tracePrint x = traceShow x $ return ()
 
+-- | For @as@, create an annotation variable @a@ and the constraints expressing that @a@ contains the union of @as@.  
 annUnion :: [AnnVar] -> State Integer (AnnVar, Constrs)
 annUnion as = do
     a <- freshAnnVar
-    return (a, S.fromList $ SuperVar a <$> as)
+    return (a, S.fromList $ Super a <$> as)
 
+-- | @annNi a pi@ inserts the constraint expressing that @pi@ is in @a@.
 annNi :: AnnVar -> Pi -> Constrs -> Constrs
 annNi a pi = S.insert (Ni a (FunId pi))
 
+-- | Generalise and insert a variable into an environment.
 genIn :: Name -> Ty AnnVar -> TyEnv -> TyEnv
 genIn x t e = M.insert x (generalise e t) e
 
+-- | @ctaW@ implements algorithm W adapted to Call Tracking Analysis.
 ctaW :: TyEnv -> Expr -> State Integer (Ty AnnVar, AnnVar, TySubst, Constrs)
 ctaW _ (Integer _) = (TInt,, mempty, mempty) <$> freshAnnVar
 ctaW _ (Bool _)    = (TBool,, mempty, mempty) <$> freshAnnVar
@@ -284,7 +331,7 @@ ctaW e (Cons i t1 t2) = do
   let th = fold [th3, th2, th1]
   a' <- freshAnnVar
   eff <- freshAnnVar
-  let c3 = annNi a' i $ S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a]
+  let c3 = annNi a' i $ S.fromList [Super eff eff1, Super eff eff2, Super a' a]
   return (TList (subst th tau1') a', eff, th, subst th $ fold [c1, c2, c3, c4, c5])
 ctaW e (LCase t1 hd tl t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
@@ -302,9 +349,12 @@ ctaW e (LCase t1 hd tl t2 t3) = do
   (eff, c5) <- annUnion [eff1, eff2, eff3]
   return (tau4, eff, th', subst th' $ fold [c1, c2, c3, c4, c5, c6, c7])
 
-ctaW' :: Expr -> ((Ty AnnVar, AnnVar, TySubst, Constrs), Integer)
-ctaW' x = flip runState 0 $ ctaW mempty x
+-- | Run @ctaW@ on an expression.
+ctaW' :: Expr -> (Ty AnnVar, AnnVar, TySubst, Constrs)
+ctaW' x = fst $ flip runState 0 $ ctaW mempty x
 
+-- | Convert a set of constraints to the constraint graph,
+-- in which a directed edge @a->b@ indicates a subset relation @a <= b@.
 toGraph :: Constrs -> [(AnnVar, AnnVar, [AnnVar])]
 toGraph cs = [(k, k, v) | (k, v) <- M.toList es]
   where
@@ -313,17 +363,19 @@ toGraph cs = [(k, k, v) | (k, v) <- M.toList es]
     addEdge b (Just c) = Just (b:c)
     addEdge b Nothing  = Just [b]
 
-    collect (SuperVar a b) = M.alter (addEdge b) a
+    collect (Super a b) = M.alter (addEdge b) a
     collect _ = id
 
+-- | Remove all constraint loops of the form @Super a a@.
 deloop :: Constrs -> Constrs
 deloop = S.fromList . mapMaybe f . S.toList
   where
-    f x@(SuperVar a b)
+    f x@(Super a b)
       | a == b    = Nothing
       | otherwise = Just x
     f x = Just x
 
+-- | Return the substitution and simplified constraint set, formed by removing all cyclic components and substituting all variables in such components to a representative.
 simplify :: Constrs -> (TySubst, Constrs)
 simplify cs = (s, cs')
   where
@@ -332,17 +384,20 @@ simplify cs = (s, cs')
     s = foldMap f ss
     cs' = deloop $ subst s cs
 
+-- | Greedily solve a set of constraints for the least solution.
+-- Loops when the constraints contain a cyclic component.
 solveConstraints :: Constrs -> AnnVar -> Ann
 solveConstraints cs a = S.unions $ S.map g $ S.filter f cs
   where
     f (Ni b _)       = a == b
-    f (SuperVar b _) = a == b
+    f (Super b _) = a == b
     
     g (Ni _ s)       = S.singleton s
-    g (SuperVar _ v) = solveConstraints cs v
+    g (Super _ v) = solveConstraints cs v
 
+-- | Infer the type and annotation of a given (top-level) expression.
 typeOf :: Expr -> (TyScheme Ann, Ann)
-typeOf x = case fst $ ctaW' x of
+typeOf x = case ctaW' x of
   (t, eff, _, cs) -> --traceShow cs $ traceShow s $ traceShow t $ traceShow eff
                 (generalise mempty $ replaceAnnVar (solveConstraints cs') t'
                 , solveConstraints cs' eff)

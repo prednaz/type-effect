@@ -11,6 +11,12 @@ import Data.Foldable (Foldable(toList))
 pretty :: Pretty a => a -> String
 pretty = pretty' False
 
+-- | The @Pretty@ class implements pretty printing for annotated types.
+-- These can be read as ordinary Haskell types with annotations.
+-- The annotated type @x :: a & b@ indicates that evaluating @x@ may call all functions at program points in the set @b@.
+-- In the arrow type @f :: t1 -a;b->@, the @a@ annotation is the set of locations @f@ may have been defined,
+-- while @b@ is the set of functions that may be called when applying @f@.
+-- The annotation @a@ in the tuple type @pair a(t1, t2)@ and in the list type @t list a@ represent the sets of locations the tuple or list may have been created.
 class Pretty a where
   pretty' :: Bool -> a -> String
 
