@@ -18,7 +18,7 @@ in
         h
 
 Type:
-forall a₃₆.(Int -{1,2};{}-> a₃₆) -{3};{1,2}-> a₃₆ & {1,2,3}
+forall a₄₈.(Int -{1,2};{}-> a₄₈) -{3};{1,2}-> a₄₈ & {1,2,3}
 
 swap1
 Expression:
@@ -48,7 +48,7 @@ in
         pcase p of Pair(h , k) => k
 
 Type:
-forall a₃₉.a₃₉ -{3};{}-> a₃₉ & {1}
+forall a₅₃.a₅₃ -{3};{}-> a₅₃ & {1}
 
 sub_problem
 Expression:
@@ -133,7 +133,7 @@ in
           else  g
 
 Type:
-forall a₈₁ a₈₂.(Int -{};{}-> a₈₂) -{3,5};{1,2,7,8}-> a₈₁ -{4,6};{}-> a₈₁ & {1,2,3,5,7,8}
+forall a₁₁₇ a₁₁₈.(Int -{};{}-> a₁₁₈) -{3,5};{1,2,7,8}-> a₁₁₇ -{4,6};{}-> a₁₁₇ & {1,2,3,5,7,8}
 
 simpler
 Expression:
@@ -188,7 +188,7 @@ in
   )
 
 Type:
-forall a₂₁.a₂₁ & {1}
+forall a₂₅.a₂₅ & {1}
 
 poison2
 Expression:
@@ -241,7 +241,7 @@ in
       f
 
 Type:
-Int -{1,2};{}-> Int & {3,4}
+Int -{1};{}-> Int & {3,4}
 
 poison
 Expression:
@@ -281,7 +281,7 @@ in
     f
 
 Type:
-forall a₂₁.(Int -{};{}-> a₂₁) -{1};{}-> a₂₁ & {}
+forall a₂₅.(Int -{};{}-> a₂₅) -{1};{}-> a₂₅ & {}
 
 no-poison
 Expression:
@@ -307,7 +307,7 @@ nil
 Expression:
 lcase Nil₁ of Cons(hd , tl) => tl or Nil₂
 Type:
-forall a₇.a₇ list{1,2} & {}
+forall a₈.a₈ list{1,2} & {}
 
 list
 Expression:
@@ -340,7 +340,7 @@ in
     f
 
 Type:
-forall a₂₁.(Int -{2};{}-> a₂₁) -{1};{2}-> a₂₁ & {1,2}
+forall a₂₇.(Int -{2};{}-> a₂₇) -{1};{2}-> a₂₇ & {1,2}
 
 let
 Expression:
@@ -403,7 +403,7 @@ in
     f
 
 Type:
-forall a₁₉.(Int -{2};{}-> a₁₉) -{1};{2}-> a₁₉ & {1,2}
+forall a₂₅.(Int -{2};{}-> a₂₅) -{1};{2}-> a₂₅ & {1,2}
 
 append
 Expression:
@@ -415,5 +415,5 @@ in
   append
 
 Type:
-forall a₂₉.(a₂₉ list{}) -{1};{}-> (a₂₉ list{3}) -{2};{1,2}-> a₂₉ list{3} & {}
+forall a₃₇.(a₃₇ list{}) -{1};{}-> (a₃₇ list{3}) -{2};{1,2}-> a₃₇ list{3} & {}
 

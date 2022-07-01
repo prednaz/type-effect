@@ -54,9 +54,9 @@ instance Substitute (Ty AnnVar) where
   subst (TySubst l _) (FreeVar v) = findWithDefault (FreeVar v) v l
   subst _ TInt = TInt
   subst _ TBool = TBool
-  subst s@(TySubst _ r) (TArrow t1 a b t2) = TArrow (subst s t1) (findWithDefault a a r) (findWithDefault b b r) (subst s t2)
-  subst s@(TySubst _ r) (TPair a t1 t2) = TPair (findWithDefault a a r) (subst s t1) (subst s t2)
-  subst s@(TySubst _ r) (TList t a) = TList (subst s t) (findWithDefault a a r)
+  subst s@(TySubst _ r) (TArrow t1 a b t2) = TArrow (subst s t1) (substitute a r) (substitute b r) (subst s t2)
+  subst s@(TySubst _ r) (TPair a t1 t2) = TPair (substitute a r) (subst s t1) (subst s t2)
+  subst s@(TySubst _ r) (TList t a) = TList (subst s t) (substitute a r)
 
 instance Substitute (TyScheme AnnVar) where
   subst s (SType ty)     = SType $ subst s ty
@@ -66,7 +66,7 @@ instance Substitute TyEnv where
   subst s = fmap (subst s)
 
 instance Substitute AnnVar where
-  subst (TySubst _ r) v = findWithDefault v v r
+  subst (TySubst _ r) v = substitute v r
 
 instance Substitute Constr where
   subst s (Ni v t) = Ni (subst s v) t
@@ -202,23 +202,26 @@ ctaW e (Fun pi f x t) = do
   b <- freshAnnVar
   c <- freshAnnVar
   let e' = M.fromList [(f, SType $ TArrow a1 b c a2), (x, SType a1)] `M.union` e
-  (tau, eff, th1, c1) <- ctaW e' t
-  let (th2, _) = unify tau (subst th1 a2)
+  (tau, eff, th1, c') <- ctaW e' t
+  (tau', c1) <- subtype tau Co
+  let (th2, _) = unify tau' (subst th1 a2)
   let th = th2 <> th1 <> TySubst mempty (M.singleton c eff)
-  let tau' = TArrow (subst th a1) (subst th b) (subst th eff) (subst th tau)
-  let c3 = subst th (annNi (subst th b) pi c1)
+  let tau'' = TArrow (subst th a1) (subst th b) (subst th eff) (subst th tau')
+  let c2 = subst th (annNi (subst th b) pi c')
   o <- freshAnnVar
-  return (tau', o, th, subst th c3)
+  return (tau'', o, th, subst th $ c1 <> c2)
 ctaW e (App t1 t2)  = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (subst th1 e) t2
   a <- freshVar
   b <- freshAnnVar
   eff3 <- freshAnnVar
-  let (th3, _) = unify (subst th2 tau1) (TArrow tau2 b eff3 a)
+  (tau1', c3) <- subtype tau1 Co
+  (tau2', c4) <- subtype tau2 Co
+  let (th3, _) = unify (subst th2 tau1') (TArrow tau2' b eff3 a)
   let th = fold [th3, th2, th1]
-  (eff, c3) <- annUnion [eff1, eff2, eff3, b]
-  return (subst th3 a, eff, th, subst th $ c1 <> c2 <> c3)
+  (eff, c5) <- annUnion [eff1, eff2, eff3, b]
+  return (subst th3 a, eff, th, subst th $ fold [c1, c2, c3, c4, c5])
 ctaW e (Let x t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   let e' = genIn x tau1 (subst th1 e)
@@ -257,13 +260,14 @@ ctaW e (PCase t1 x y t2) = do
   a1 <- freshVar
   a2 <- freshVar
   b <- freshAnnVar
-  let (th2, _) = unify (TPair b a1 a2) tau1
+  (tau1', c4) <- subtype tau1 Co
+  let (th2, _) = unify (TPair b a1 a2) tau1'
   let th = th2 <> th1
   let e' = genIn x (subst th a1) $ genIn y (subst th a2) $ subst th e
   (tau2, eff2, th3, c2) <- ctaW e' t2
   let th' = th3 <> th
   (eff, c3) <- annUnion [eff1, eff2]
-  return (tau2, eff, th', subst th' $ c1 <> c2 <> c3)
+  return (tau2, eff, th', subst th' $ fold [c1, c2, c3, c4])
 ctaW _ (Nil i) = do
   tau <- freshVar
   eff <- freshAnnVar
@@ -273,25 +277,29 @@ ctaW e (Cons i t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (subst th1 e) t2
   a <- freshAnnVar
-  let (th3, _) = unify (TList (subst th2 tau1) a) tau2  -- subeffect manually
+  (tau1', c4) <- subtype tau1 Co
+  (tau2', c5) <- subtype tau2 Co
+  let (th3, _) = unify (TList (subst th2 tau1') a) tau2'
   let th = fold [th3, th2, th1]
   a' <- freshAnnVar
   eff <- freshAnnVar
   let c3 = annNi a' i $ S.fromList [SuperVar eff eff1, SuperVar eff eff2, SuperVar a' a]
-  return (TList (subst th tau1) a', eff, th, subst th $ c1 <> c2 <> c3)
+  return (TList (subst th tau1') a', eff, th, subst th $ fold [c1, c2, c3, c4, c5])
 ctaW e (LCase t1 hd tl t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   tau <- freshVar
   a <- freshAnnVar
-  let (th2, _) = unify (TList tau a) tau1
+  (tau', c6) <- subtype tau Co
+  (tau1', c7) <- subtype tau1 Co
+  let (th2, _) = unify (TList tau' a) tau1'
   let th = th2 <> th1
-  let e' = genIn hd (subst th tau) $ genIn tl (subst th tau1) $ subst th e
+  let e' = genIn hd (subst th tau') $ genIn tl (subst th tau1') $ subst th e
   (tau2, eff2, th3, c2) <- ctaW e' t2
   (tau3, eff3, th4, c3) <- ctaW e t3
   (th5, tau4, c4) <- subUnify (subst th4 tau2) tau3
   let th' = fold [th5, th3, th]
   (eff, c5) <- annUnion [eff1, eff2, eff3]
-  return (tau4, eff, th', subst th' $ c1 <> c2 <> c3 <> c4 <> c5)
+  return (tau4, eff, th', subst th' $ fold [c1, c2, c3, c4, c5, c6, c7])
 
 ctaW' :: Expr -> ((Ty AnnVar, AnnVar, TySubst, Constrs), Integer)
 ctaW' x = flip runState 0 $ ctaW mempty x
