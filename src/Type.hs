@@ -23,7 +23,7 @@ import Data.Foldable (Foldable(fold))
 newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId
 newtype AnnVar  = AnnVar Integer deriving (Eq, Ord, Show)
-newtype TyVar      = TyVar Integer deriving (Eq, Show, Ord)
+newtype TyVar   = TyVar Integer deriving (Eq, Show, Ord)
 data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
 data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a a (Ty a) | TPair a (Ty a) (Ty a) | TList (Ty a) a deriving Show
 type TyEnv      = Map Name (TyScheme AnnVar)
@@ -74,33 +74,17 @@ instance Substitute Constr where
 instance (Ord a, Substitute a) => Substitute (Set a) where
   subst s = S.map (subst s)
 
-freshen :: Integer -> TyVar -> TyVar -> TyVar
-freshen i (TyVar j) x@(TyVar k)
-  | j == k            = TyVar i
-  | otherwise         = x
-
-freshIndex :: State Integer Integer
-freshIndex = state $ \s -> (s, s + 1)
-
 freshVar :: State Integer (Ty a)
 freshVar = state $ \s -> (FreeVar $ TyVar s, s + 1)
 
 freshAnnVar :: State Integer AnnVar
 freshAnnVar = state $ \s -> (AnnVar s, s + 1)
 
-replaceTyVar :: (TyVar -> TyVar) -> Ty a -> Ty a
-replaceTyVar f (FreeVar v) = FreeVar $ f v
-replaceTyVar _ TInt = TInt
-replaceTyVar _ TBool = TBool
-replaceTyVar f (TArrow t1 a b t2) = TArrow (replaceTyVar f t1) a b (replaceTyVar f t2)
-replaceTyVar f (TPair cs t1 t2) = TPair cs (replaceTyVar f t1) (replaceTyVar f t2)
-replaceTyVar f (TList t a) = TList (replaceTyVar f t) a
-
-cfaInstantiate :: TyScheme a -> State Integer (Ty a)
+cfaInstantiate :: TyScheme AnnVar -> State Integer (Ty AnnVar)
 cfaInstantiate (SType ty)    = return ty
 cfaInstantiate (Forall v ts) = do
-  i <- freshIndex
-  replaceTyVar (freshen i v) <$> cfaInstantiate ts
+  vFresh <- freshVar
+  subst (TySubst (M.singleton v vFresh) mempty) <$> cfaInstantiate ts
 
 freeVars :: Ty a -> Set TyVar
 freeVars (FreeVar v) = S.singleton v
@@ -109,18 +93,12 @@ freeVars (TPair _ t1 t2) = freeVars t1 <> freeVars t2
 freeVars (TList t _) = freeVars t
 freeVars _ = mempty
 
-freeAnnVars :: Ty AnnVar -> Set AnnVar
-freeAnnVars (TArrow _ a b _) = S.fromList [a, b]
-freeAnnVars (TPair a _ _) = S.singleton a
-freeAnnVars (TList _ a) = S.singleton a
-freeAnnVars _ = mempty
-
 schemeFreeVars :: TyScheme a -> Set TyVar
 schemeFreeVars (SType t)     = freeVars t
 schemeFreeVars (Forall _ ts) = schemeFreeVars ts
 
 envFreeVars :: TyEnv -> Set TyVar
-envFreeVars = M.foldr (\x y -> schemeFreeVars x <> y) mempty
+envFreeVars = foldMap schemeFreeVars
 
 generalise :: TyEnv -> Ty a -> TyScheme a
 generalise e t = S.foldr Forall (SType t) (freeVars t `S.difference` envFreeVars e)
@@ -164,16 +142,14 @@ subUnify a b = do
   let (s, t) = unify a' b'
   return (s, t, c1 <> c2)
 
-data Variance = Co | Contra | Invariant deriving Eq
+data Variance = Co | Contra deriving Eq
 op :: Variance -> Variance
 op Co = Contra
 op Contra = Co
-op Invariant = Invariant
 
 variance :: Variance -> AnnVar -> AnnVar -> Constr
 variance Co     a b = SuperVar b a
 variance Contra a b = SuperVar a b
-variance Invariant _ _ = error "cannot generate constraint for invariant annotation variable"
 
 subtype :: Ty AnnVar -> Variance -> State Integer (Ty AnnVar, Constrs)
 subtype (TArrow t1 a b t2) v = do
@@ -224,9 +200,9 @@ ctaW e (Fun pi f x t) = do
   let e' = M.fromList [(f, SType $ TArrow a1 b c a2), (x, SType a1)] `M.union` e
   (tau, eff, th1, c1) <- ctaW e' t
   let (th2, _) = unify tau (subst th1 a2)
-  let th = th2 <> th1
+  let th = th2 <> th1 <> TySubst mempty (M.singleton c eff)
   let tau' = TArrow (subst th a1) (subst th b) (subst th eff) (subst th tau)
-  let c3 = S.map (subst th) (c1 <> S.singleton (Super (subst th b) (S.singleton $ FunId pi)))
+  let c3 = subst th (c1 <> S.singleton (Super (subst th b) (S.singleton $ FunId pi)))
   o <- freshAnnVar
   return (tau', o, th, subst th c3)
 ctaW e (App t1 t2)  = do
@@ -271,7 +247,7 @@ ctaW e (Pair pi t1 t2) = do
   a <- freshAnnVar
   let th = th2 <> th1
   (eff, c3) <- annUnion [eff1, eff2]
-  return (TPair a (subst th tau1) tau2, eff, th, subst th $ S.insert (Super (subst th a) $ S.singleton (FunId pi)) $ c1 <> c2 <> c3)
+  return (TPair a (subst th2 tau1) tau2, eff, th, subst th2 $ S.insert (Super (subst th a) $ S.singleton (FunId pi)) $ c1 <> c2 <> c3)
 ctaW e (PCase t1 x y t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   a1 <- freshVar
@@ -293,7 +269,7 @@ ctaW e (Cons i t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (subst th1 e) t2
   a <- freshAnnVar
-  let (th3, _) = unify (subst th2 $ TList tau1 a) tau2
+  let (th3, _) = unify (TList (subst th2 tau1) a) tau2  -- subeffect manually
   let th = fold [th3, th2, th1]
   a' <- freshAnnVar
   eff <- freshAnnVar
@@ -308,7 +284,7 @@ ctaW e (LCase t1 hd tl t2 t3) = do
   let e' = genIn hd (subst th tau) $ genIn tl (subst th tau1) $ subst th e
   (tau2, eff2, th3, c2) <- ctaW e' t2
   (tau3, eff3, th4, c3) <- ctaW e t3
-  (th5, tau4, c4) <- subUnify (subst th4 $ subst th tau2) tau3
+  (th5, tau4, c4) <- subUnify (subst th4 tau2) tau3
   let th' = fold [th5, th3, th]
   (eff, c5) <- annUnion [eff1, eff2, eff3]
   return (tau4, eff, th', subst th' $ c1 <> c2 <> c3 <> c4 <> c5)
@@ -331,16 +307,13 @@ findSCC :: Eq node => node -> [[node]] -> [node]
 findSCC x xss = fromMaybe [x] $ find (x `elem`) xss
 
 solveAt :: Constrs -> AnnVar -> Ann
-solveAt cs a = S.unions $ S.map g $ S.filter f cs
+solveAt cs a = foldMap g cs
   where
-    f (Super b _) = a == b
-    f _           = False
-
-    g (Super _ s) = s
-    g _           = undefined
+    g (Super b s) | a == b = s
+    g _           = mempty
 
 solveBelow :: Constrs -> [[AnnVar]] -> AnnVar -> Ann
-solveBelow cs ss a = S.unions $ S.map (solveSCC cs ss) h
+solveBelow cs ss a = foldMap (solveSCC cs ss) h
   where
     s = findSCC a ss
 

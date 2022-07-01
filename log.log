@@ -190,6 +190,36 @@ in
 Type:
 forall a₂₁.a₂₁ & {1}
 
+poison2
+Expression:
+let f =
+  fn₁ a =>
+    a 0 + 0
+in
+  let g =
+    fn₂ a =>
+      a 0 + 0
+  in
+    let x =
+      f (fn₃ a =>
+        a + 0
+      )
+    in
+      let y =
+        g (fn₄ a =>
+          a + 0
+        )
+      in
+        let z =
+          if  false
+          then  f
+          else  g
+        in
+          g
+
+Type:
+(Int -{4};{}-> Int) -{2};{4}-> Int & {1,2,3,4}
+
 poison1
 Expression:
 let f =
