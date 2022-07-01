@@ -20,7 +20,7 @@ import Data.Maybe
 newtype FunId   = FunId Pi deriving (Eq, Ord, Show)
 type Ann        = Set FunId
 newtype AnnVar  = AnnVar Integer deriving (Eq, Ord, Show)
-newtype TyVar      = TyVar Integer deriving (Eq, Show, Ord)
+newtype TyVar   = TyVar Integer deriving (Eq, Show, Ord)
 data TyScheme a = SType (Ty a) | Forall TyVar (TyScheme a) deriving Show
 data Ty a       = FreeVar TyVar | TInt | TBool | TArrow (Ty a) a a (Ty a) | TPair a (Ty a) (Ty a) | TList (Ty a) a deriving Show
 type TyEnv      = Map Name (TyScheme AnnVar)
@@ -69,11 +69,11 @@ freshVar = state $ \s -> (FreeVar $ TyVar s, s + 1)
 freshAnnVar :: State Integer AnnVar
 freshAnnVar = state $ \s -> (AnnVar s, s + 1)
 
-cfaInstantiate :: TyScheme a -> State Integer (Ty a)
+cfaInstantiate :: TyScheme AnnVar -> State Integer (Ty AnnVar)
 cfaInstantiate (SType ty)    = return ty
 cfaInstantiate (Forall v ts) = do
   vFresh <- freshVar
-  substTyVar ([(v, vFresh)]) <$> cfaInstantiate ts
+  substTyVar (M.singleton v vFresh, mempty) <$> cfaInstantiate ts
 
 freeVars :: Ty a -> Set TyVar
 freeVars (FreeVar v) = S.singleton v
@@ -137,12 +137,10 @@ data Variance = Co | Contra deriving Eq
 op :: Variance -> Variance
 op Co = Contra
 op Contra = Co
-op Invariant = Invariant
 
 variance :: Variance -> AnnVar -> AnnVar -> Constr
 variance Co     a b = SuperVar b a
 variance Contra a b = SuperVar a b
-variance Invariant _ _ = error "cannot generate constraint for invariant annotation variable"
 
 subtype :: Ty AnnVar -> Variance -> State Integer (Ty AnnVar, Constrs)
 subtype (TArrow t1 a b t2) v = do
@@ -187,9 +185,10 @@ ctaW e (Fun pi f x t) = do
   let (th2, _) = unify tau (substTyVar th1 a2)
   let tau' = TArrow (substTyVar th2 (substTyVar th1 a1)) (substTyAnn th2 (substTyAnn th1 b)) (substTyAnn th2 eff) (substTyVar th2 tau)
   let c3 = substTyAnns th2 c1 <> S.singleton (Super (substTyAnn th2 (substTyAnn th1 b)) (S.singleton $ FunId pi))
+  let th' = (mempty, M.singleton c eff)
   let th = composeSubst th2 th1 -- move up and use
   o <- freshAnnVar
-  return (tau', o, th <> [c == eff], c3)
+  return (tau', o, composeSubst th' th, c3)
 ctaW e (App t1 t2)  = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
@@ -263,11 +262,11 @@ ctaW e (Cons i t1 t2) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   (tau2, eff2, th2, c2) <- ctaW (substEnv th1 e) t2
   a <- freshAnnVar
-  let (th3, _) = subUnify (TList (substTyVar th2 tau1) a) tau2
+  let (th3, tau) = unify (TList (substTyVar th2 tau1) a) tau2 -- subeffect manually
   let th = composeSubsts [th3, th2, th1]
   eff <- freshAnnVar
-  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, Super _a (S.singleton $ FunId i)]
-  return (_, eff, th, substTyAnns th $ c1 <> c2 <> c3)
+  let c3 = S.fromList [SuperVar eff eff1, SuperVar eff eff2, Super a (S.singleton $ FunId i)]
+  return (tau, eff, th, substTyAnns th $ c1 <> c2 <> c3)
 ctaW e (LCase t1 hd tl t2 t3) = do
   (tau1, eff1, th1, c1) <- ctaW e t1
   tau <- freshVar
@@ -314,23 +313,13 @@ solveBelow cs ss a = foldMap (solveSCC cs ss) h
   where
     s = findSCC a ss
 
-    f (SuperVar b c) | a == b && notElem c s = Just (findSCC c ss)
-    f _              = Nothing
+    f (SuperVar b c) = a == b && notElem c s
+    f _              = False
 
-    h = S.mapMaybe g cs
-    -- potential alternatively
-    below =
-      -- Set AnnVar
-      S.fromList $
-      -- [AnnVar]
-      fold $
-      -- [[AnnVar]]
-      fst $
-      -- ([[AnnVar]], [[AnnVar]])
-      break (a `elem`) ss
-    g (Super b s) | b `S.member` below = S
-    g _ = mempty
-    result = foldMap g cs
+    g (SuperVar _ b) = S.insert (findSCC b ss)
+    g _              = undefined
+
+    h = S.foldr g mempty $ S.filter f cs
 
 solveSCC :: Constrs -> [[AnnVar]] -> [AnnVar] -> Ann
 solveSCC cs ss s = S.unions $ (solveAt cs <$> s) ++ (solveBelow cs ss <$> s)

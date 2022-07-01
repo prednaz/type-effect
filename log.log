@@ -385,5 +385,5 @@ in
   append
 
 Type:
-forall a₂₉.(a₂₉ list{}) -{1};{}-> (a₂₉ list{3}) -{2};{1,2}-> a₂₉ list{3} & {}
+forall a₂₈.(a₂₈ list{}) -{1};{}-> (a₂₈ list{3}) -{2};{1,2}-> a₂₈ list{3} & {}
 
