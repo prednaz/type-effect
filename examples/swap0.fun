@@ -1,0 +1,1 @@
+fn p => (pcase p of Pair (x , y) => Pair (y , x))

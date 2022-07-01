@@ -1,1 +1,6 @@
-(fn f => (fn g => (fn h => f) (if false then f else g)) (fn a => a + 1)) (fn a => a + 1)
+(fn f =>
+  let g = fn a => a in
+  let z = if false then f else g in
+  f
+)
+  (fn a => a)
