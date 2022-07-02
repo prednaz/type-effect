@@ -5,5 +5,5 @@ We augment the Fun language with pairs, lists, and general datatypes, and provid
 We furthermore extend the Control Flow Analysis to Call Tracking Analysis by inserting side-effects for calls into the rules, and implement subtyping to replace subeffecting.
 
 documentation
-- [`documentation.pdf`](documentation.pdf)
+- [`report.pdf`](report.pdf)
 - [haddocks](https://htmlpreview.github.io/?https://github.com/prednaz/type-effect/blob/master/docs/index.html)
