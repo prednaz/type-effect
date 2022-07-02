@@ -1,0 +1,529 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">-- (C) 2013 Pepijn Kokke &amp; Wout Elsinghorst</span><span>
+</span><span id="line-2"></span><span class="hs-comment">-- Adapted by Jurriaan Hage</span><span>
+</span><span id="line-3"></span><span>
+</span><span id="line-4"></span><span class="hs-pragma">{-# LANGUAGE RankNTypes #-}</span><span>
+</span><span id="line-5"></span><span class="hs-pragma">{-# LANGUAGE FlexibleContexts #-}</span><span>
+</span><span id="line-6"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Parsing</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-7"></span><span>
+</span><span id="line-8"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Ast.html"><span class="hs-identifier">Ast</span></a></span><span>
+</span><span id="line-9"></span><span>
+</span><span id="line-10"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Prelude</span></span><span> </span><span class="hs-keyword">hiding</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier">abs</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">sum</span></span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-11"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Text.ParserCombinators.UU</span></span><span>
+</span><span id="line-12"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Text.ParserCombinators.UU.Utils</span></span><span>
+</span><span id="line-13"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Text.ParserCombinators.UU.Idioms</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">iI</span></span><span class="hs-special">,</span><span class="annot"><span class="hs-identifier">Ii</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-14"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Text.ParserCombinators.UU.BasicInstances</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Parser</span></span><span class="hs-special">,</span><span class="annot"><span class="hs-identifier">pSym</span></span><span class="hs-special">)</span><span>
+</span><span id="line-15"></span><span>
+</span><span id="line-16"></span><span class="hs-comment">-- * Top-Level Parsers</span><span>
+</span><span id="line-17"></span><span>
+</span><span id="line-18"></span><span class="annot"><a href="Parsing.html#parseExpr"><span class="hs-identifier hs-type">parseExpr</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-19"></span><span id="parseExpr"><span class="annot"><span class="annottext">parseExpr :: String -&gt; Expr
+</span><a href="Parsing.html#parseExpr"><span class="hs-identifier hs-var hs-var">parseExpr</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Parser Expr -&gt; String -&gt; Expr
+forall a. String -&gt; Parser a -&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">runParser</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;stdin&quot;</span></span><span> </span><span class="annot"><span class="annottext">Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span>
+</span><span id="line-20"></span><span>
+</span><span id="line-21"></span><span class="hs-comment">-- * Parsing the FUN language</span><span>
+</span><span id="line-22"></span><span class="annot"><a href="Parsing.html#pExpr"><span class="hs-identifier hs-type">pExpr</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Parser</span></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-23"></span><span id="pExpr"><span class="annot"><span class="annottext">pExpr :: P (Str Char state loc) Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var hs-var">pExpr</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059481"><span class="hs-identifier hs-var">pFn</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059479"><span class="hs-identifier hs-var">pFun</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059478"><span class="hs-identifier hs-var">pITE</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059477"><span class="hs-identifier hs-var">pLet</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059476"><span class="hs-identifier hs-var">pPair</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059475"><span class="hs-identifier hs-var">pPCase</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059474"><span class="hs-identifier hs-var">pCons</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="#local-6989586621679059473"><span class="hs-identifier hs-var">pLCase</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (p :: * -&gt; *) a. ExtAlternative p =&gt; p a -&gt; p a -&gt; p a
+</span><span class="hs-operator hs-var">&lt;&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059471"><span class="hs-identifier hs-var">pBin</span></a></span><span>
+</span><span id="line-24"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-25"></span><span>  </span><span>
+</span><span id="line-26"></span><span>  </span><span class="hs-comment">-- literal expressions</span><span>
+</span><span id="line-27"></span><span>  </span><span id="local-6989586621679059470"><span class="annot"><span class="annottext">pLit :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059470"><span class="hs-identifier hs-var hs-var">pLit</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Expr
+</span><a href="Ast.html#Integer"><span class="hs-identifier hs-var">Integer</span></a></span><span> </span><span class="annot"><span class="annottext">(Integer -&gt; Expr)
+-&gt; P (Str Char state loc) Integer -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Integer
+forall a. Num a =&gt; Parser a
+</span><span class="hs-identifier hs-var">pInteger</span></span><span>
+</span><span id="line-28"></span><span>     </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Expr
+</span><a href="Ast.html#Bool"><span class="hs-identifier hs-var">Bool</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>  </span><span class="annot"><span class="annottext">Expr
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; P (Str Char state loc) String
+forall loc state.
+(IsLocationUpdatedBy loc Char, ListLike state Char) =&gt;
+String -&gt; P (Str Char state loc) String
+</span><span class="hs-identifier hs-var">pSymbol</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;true&quot;</span></span><span>
+</span><span id="line-29"></span><span>     </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Expr
+</span><a href="Ast.html#Bool"><span class="hs-identifier hs-var">Bool</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Expr
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; P (Str Char state loc) String
+forall loc state.
+(IsLocationUpdatedBy loc Char, ListLike state Char) =&gt;
+String -&gt; P (Str Char state loc) String
+</span><span class="hs-identifier hs-var">pSymbol</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;false&quot;</span></span><span>
+</span><span id="line-30"></span><span>     </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Expr
+</span><a href="Ast.html#Nil"><span class="hs-identifier hs-var">Nil</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="annottext">Expr
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; P (Str Char state loc) String
+forall loc state.
+(IsLocationUpdatedBy loc Char, ListLike state Char) =&gt;
+String -&gt; P (Str Char state loc) String
+</span><span class="hs-identifier hs-var">pSymbol</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Nil&quot;</span></span><span>
+</span><span id="line-31"></span><span>    </span><span>
+</span><span id="line-32"></span><span>  </span><span class="hs-comment">-- atomic expressions</span><span>
+</span><span id="line-33"></span><span>  </span><span id="local-6989586621679059462"><span class="annot"><span class="annottext">pAtom :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059462"><span class="hs-identifier hs-var hs-var">pAtom</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059470"><span class="hs-identifier hs-var">pLit</span></a></span><span>
+</span><span id="line-34"></span><span>     </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (p :: * -&gt; *) a. ExtAlternative p =&gt; p a -&gt; p a -&gt; p a
+</span><span class="hs-operator hs-var">&lt;&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; Expr
+</span><a href="Ast.html#Var"><span class="hs-identifier hs-var">Var</span></a></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Expr)
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) Expr
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span>
+</span><span id="line-35"></span><span>     </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (p :: * -&gt; *) a. ExtAlternative p =&gt; p a -&gt; p a -&gt; p a
+</span><span class="hs-operator hs-var">&lt;&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall a. ParserTrafo a a
+</span><span class="hs-identifier hs-var">pParens</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span>
+</span><span id="line-36"></span><span>  </span><span>
+</span><span id="line-37"></span><span>  </span><span class="hs-comment">-- simple expressions</span><span>
+</span><span id="line-38"></span><span>  </span><span class="annot"><a href="#local-6989586621679059481"><span class="hs-identifier hs-type">pFn</span></a></span><span class="hs-special">,</span><span class="annot"><a href="#local-6989586621679059479"><span class="hs-identifier hs-type">pFun</span></a></span><span class="hs-special">,</span><span class="annot"><a href="#local-6989586621679059477"><span class="hs-identifier hs-type">pLet</span></a></span><span class="hs-special">,</span><span class="annot"><a href="#local-6989586621679059478"><span class="hs-identifier hs-type">pITE</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679059476"><span class="hs-identifier hs-type">pPair</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679059475"><span class="hs-identifier hs-type">pPCase</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679059474"><span class="hs-identifier hs-type">pCons</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679059473"><span class="hs-identifier hs-type">pLCase</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Parser</span></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-39"></span><span>  </span><span id="local-6989586621679059481"><span class="annot"><span class="annottext">pFn :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059481"><span class="hs-identifier hs-var hs-var">pFn</span></a></span></span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(String -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; P (Str Char state loc) String
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; String -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Fn"><span class="hs-identifier hs-var">Fn</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;fn&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;=&gt;&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span> </span><span class="hs-comment">-- Default Pi to 0</span><span>
+</span><span id="line-40"></span><span>  </span><span id="local-6989586621679059479"><span class="annot"><span class="annottext">pFun :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059479"><span class="hs-identifier hs-var hs-var">pFun</span></a></span></span><span>    </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(String -&gt; String -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; P (Str Char state loc) String
+-&gt; P (Str Char state loc) String
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; String -&gt; String -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Fun"><span class="hs-identifier hs-var">Fun</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;fun&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;=&gt;&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span> </span><span class="hs-comment">-- Dito</span><span>
+</span><span id="line-41"></span><span>  </span><span id="local-6989586621679059477"><span class="annot"><span class="annottext">pLet :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059477"><span class="hs-identifier hs-var hs-var">pLet</span></a></span></span><span>    </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(String -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; P (Str Char state loc) String
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Let"><span class="hs-identifier hs-var">Let</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;let&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;=&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;in&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span>
+</span><span id="line-42"></span><span>  </span><span id="local-6989586621679059478"><span class="annot"><span class="annottext">pITE :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059478"><span class="hs-identifier hs-var hs-var">pITE</span></a></span></span><span>    </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#ITE"><span class="hs-identifier hs-var">ITE</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;if&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;then&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;else&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span>
+</span><span id="line-43"></span><span>  </span><span id="local-6989586621679059476"><span class="annot"><span class="annottext">pPair :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059476"><span class="hs-identifier hs-var hs-var">pPair</span></a></span></span><span>   </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Pair"><span class="hs-identifier hs-var">Pair</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Pair&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span>
+</span><span id="line-44"></span><span>  </span><span id="local-6989586621679059475"><span class="annot"><span class="annottext">pPCase :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059475"><span class="hs-identifier hs-var hs-var">pPCase</span></a></span></span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; String -&gt; String -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; String
+-&gt; String
+-&gt; P (Str Char state loc) String
+-&gt; String
+-&gt; P (Str Char state loc) String
+-&gt; String
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; String -&gt; String -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#PCase"><span class="hs-identifier hs-var">PCase</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;pcase&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;of&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Pair&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;=&gt;&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span>
+</span><span id="line-45"></span><span>  </span><span id="local-6989586621679059474"><span class="annot"><span class="annottext">pCons :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059474"><span class="hs-identifier hs-var hs-var">pCons</span></a></span></span><span>   </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Cons"><span class="hs-identifier hs-var">Cons</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Cons&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span>
+</span><span id="line-46"></span><span>  </span><span id="local-6989586621679059473"><span class="annot"><span class="annottext">pLCase :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059473"><span class="hs-identifier hs-var hs-var">pLCase</span></a></span></span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; String -&gt; String -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; String
+-&gt; String
+-&gt; P (Str Char state loc) String
+-&gt; String
+-&gt; P (Str Char state loc) String
+-&gt; String
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; String
+-&gt; P (Str Char state loc) Expr
+-&gt; Ii
+-&gt; P (Str Char state loc) Expr
+forall i a g. Idiomatic i (a -&gt; a) g =&gt; g
+</span><span class="hs-identifier hs-var">iI</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; String -&gt; String -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#LCase"><span class="hs-identifier hs-var">LCase</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;lcase&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;of&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Cons&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var">pIdent</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;=&gt;&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;or&quot;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+Parser Expr
+</span><a href="Parsing.html#pExpr"><span class="hs-identifier hs-var">pExpr</span></a></span><span> </span><span class="annot"><span class="annottext">Ii
+</span><span class="hs-identifier hs-var">Ii</span></span><span>
+</span><span id="line-47"></span><span>   </span><span>
+</span><span id="line-48"></span><span>  </span><span class="hs-comment">-- chained expressions</span><span>
+</span><span id="line-49"></span><span>  </span><span id="local-6989586621679059449"><span class="annot"><span class="annottext">pApp :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059449"><span class="hs-identifier hs-var hs-var">pApp</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) (Expr -&gt; Expr -&gt; Expr)
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (p :: * -&gt; *) c. IsParser p =&gt; p (c -&gt; c -&gt; c) -&gt; p c -&gt; p c
+</span><span class="hs-identifier hs-var">pChainl_ng</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#App"><span class="hs-identifier hs-var">App</span></a></span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr)
+-&gt; P (Str Char state loc) String
+-&gt; P (Str Char state loc) (Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><span class="hs-identifier hs-var">pSpaces</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059462"><span class="hs-identifier hs-var">pAtom</span></a></span><span>
+</span><span id="line-50"></span><span>  </span><span id="local-6989586621679059471"><span class="annot"><span class="annottext">pBin :: P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059471"><span class="hs-identifier hs-var hs-var">pBin</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) (Expr -&gt; Expr -&gt; Expr)
+-&gt; P (Str Char state loc) Expr -&gt; P (Str Char state loc) Expr
+forall (p :: * -&gt; *) c. IsParser p =&gt; p (c -&gt; c -&gt; c) -&gt; p c -&gt; p c
+</span><span class="hs-identifier hs-var">pChainl_ng</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">String -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#bin"><span class="hs-identifier hs-var">bin</span></a></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; P (Str Char state loc) String
+-&gt; P (Str Char state loc) (Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String
+Parser String
+</span><a href="Parsing.html#pOper"><span class="hs-identifier hs-var">pOper</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Expr
+</span><a href="#local-6989586621679059449"><span class="hs-identifier hs-var">pApp</span></a></span><span>
+</span><span id="line-51"></span><span>  </span><span>
+</span><span id="line-52"></span><span class="annot"><a href="Parsing.html#pIdent"><span class="hs-identifier hs-type">pIdent</span></a></span><span class="hs-special">,</span><span class="annot"><a href="Parsing.html#pConst"><span class="hs-identifier hs-type">pConst</span></a></span><span class="hs-special">,</span><span class="annot"><a href="Parsing.html#pOper"><span class="hs-identifier hs-type">pOper</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Parser</span></span><span> </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span>
+</span><span id="line-53"></span><span id="pIdent"><span class="annot"><span class="annottext">pIdent :: P (Str Char state loc) String
+</span><a href="Parsing.html#pIdent"><span class="hs-identifier hs-var hs-var">pIdent</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall a. ParserTrafo a a
+</span><span class="hs-identifier hs-var">lexeme</span></span><span> </span><span class="annot"><span class="annottext">(P (Str Char state loc) String -&gt; P (Str Char state loc) String)
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">:</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Char -&gt; String -&gt; String)
+-&gt; P (Str Char state loc) Char
+-&gt; P (Str Char state loc) (String -&gt; String)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><span class="hs-identifier hs-var">pLower</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) (String -&gt; String)
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char -&gt; P (Str Char state loc) String
+forall (p :: * -&gt; *) a. IsParser p =&gt; p a -&gt; p [a]
+</span><span class="hs-identifier hs-var">pMany</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><span class="hs-identifier hs-var">pLetter</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+-&gt; P (Str Char state loc) Char -&gt; P (Str Char state loc) Char
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><span class="hs-identifier hs-var">pDigit</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+-&gt; P (Str Char state loc) Char -&gt; P (Str Char state loc) Char
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><a href="Parsing.html#pUnderscore"><span class="hs-identifier hs-var">pUnderscore</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-54"></span><span id="pConst"><span class="annot"><span class="annottext">pConst :: P (Str Char state loc) String
+</span><a href="Parsing.html#pConst"><span class="hs-identifier hs-var hs-var">pConst</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall a. ParserTrafo a a
+</span><span class="hs-identifier hs-var">lexeme</span></span><span> </span><span class="annot"><span class="annottext">(P (Str Char state loc) String -&gt; P (Str Char state loc) String)
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">:</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Char -&gt; String -&gt; String)
+-&gt; P (Str Char state loc) Char
+-&gt; P (Str Char state loc) (String -&gt; String)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><span class="hs-identifier hs-var">pUpper</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) (String -&gt; String)
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char -&gt; P (Str Char state loc) String
+forall (p :: * -&gt; *) a. IsParser p =&gt; p a -&gt; p [a]
+</span><span class="hs-identifier hs-var">pMany</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><span class="hs-identifier hs-var">pLetter</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+-&gt; P (Str Char state loc) Char -&gt; P (Str Char state loc) Char
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><span class="hs-identifier hs-var">pDigit</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+-&gt; P (Str Char state loc) Char -&gt; P (Str Char state loc) Char
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char
+Parser Char
+</span><a href="Parsing.html#pUnderscore"><span class="hs-identifier hs-var">pUnderscore</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-55"></span><span id="pOper"><span class="annot"><span class="annottext">pOper :: P (Str Char state loc) String
+</span><a href="Parsing.html#pOper"><span class="hs-identifier hs-var hs-var">pOper</span></a></span></span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall a. ParserTrafo a a
+</span><span class="hs-identifier hs-var">lexeme</span></span><span> </span><span class="annot"><span class="annottext">(P (Str Char state loc) String -&gt; P (Str Char state loc) String)
+-&gt; P (Str Char state loc) String -&gt; P (Str Char state loc) String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">P (Str Char state loc) Char -&gt; P (Str Char state loc) String
+forall (p :: * -&gt; *) a. IsParser p =&gt; p a -&gt; p [a]
+</span><span class="hs-identifier hs-var">pSome</span></span><span> </span><span class="annot"><span class="annottext">(P (Str Char state loc) Char -&gt; P (Str Char state loc) String)
+-&gt; P (Str Char state loc) Char -&gt; P (Str Char state loc) String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; P (Str Char state loc) Char
+forall loc state.
+(IsLocationUpdatedBy loc Char, ListLike state Char) =&gt;
+String -&gt; P (Str Char state loc) Char
+</span><span class="hs-identifier hs-var">pAnySym</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;*+/-&quot;</span></span><span>
+</span><span id="line-56"></span><span>
+</span><span id="line-57"></span><span class="annot"><a href="Parsing.html#pUnderscore"><span class="hs-identifier hs-type">pUnderscore</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Parser</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span>
+</span><span id="line-58"></span><span id="pUnderscore"><span class="annot"><span class="annottext">pUnderscore :: P (Str Char state loc) Char
+</span><a href="Parsing.html#pUnderscore"><span class="hs-identifier hs-var hs-var">pUnderscore</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Char -&gt; P (Str Char state loc) Char
+forall a loc state.
+(Eq a, Show a, IsLocationUpdatedBy loc a, ListLike state a) =&gt;
+a -&gt; P (Str a state loc) a
+</span><span class="hs-identifier hs-var">pSym</span></span><span> </span><span class="annot"><span class="annottext">Char
+</span><span class="hs-char">'_'</span></span><span>
+</span><span id="line-59"></span><span>
+</span><span id="line-60"></span><span class="hs-comment">-- * Recognising more list structures with separators</span><span>
+</span><span id="line-61"></span><span>
+</span><span id="line-62"></span><span id="local-6989586621679059491"><span id="local-6989586621679059492"><span id="local-6989586621679059493"><span id="local-6989586621679059494"><span class="annot"><a href="Parsing.html#pFoldr2Sep"><span class="hs-identifier hs-type">pFoldr2Sep</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IsParser</span></span><span> </span><span class="annot"><a href="#local-6989586621679059494"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679059493"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059492"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059492"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679059492"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059494"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679059491"><span class="hs-identifier hs-type">a1</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059494"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679059493"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059494"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679059492"><span class="hs-identifier hs-type">b</span></a></span></span></span></span></span><span>
+</span><span id="line-63"></span><span id="pFoldr2Sep"><span class="annot"><span class="annottext">pFoldr2Sep :: (a -&gt; b -&gt; b, b) -&gt; p a1 -&gt; p a -&gt; p b
+</span><a href="Parsing.html#pFoldr2Sep"><span class="hs-identifier hs-var hs-var">pFoldr2Sep</span></a></span></span><span> </span><span id="local-6989586621679059431"><span class="annot"><span class="annottext">alg :: (a -&gt; b -&gt; b, b)
+</span><a href="#local-6989586621679059431"><span class="hs-identifier hs-var">alg</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span id="local-6989586621679059430"><span class="annot"><span class="annottext">a -&gt; b -&gt; b
+</span><a href="#local-6989586621679059430"><span class="hs-identifier hs-var">op</span></a></span></span><span class="hs-special">,</span><span id="local-6989586621679059429"><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679059429"><span class="hs-identifier hs-var">_e</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679059428"><span class="annot"><span class="annottext">p a1
+</span><a href="#local-6989586621679059428"><span class="hs-identifier hs-var">sep</span></a></span></span><span> </span><span id="local-6989586621679059427"><span class="annot"><span class="annottext">p a
+</span><a href="#local-6989586621679059427"><span class="hs-identifier hs-var">p</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; p a1 -&gt; p a -&gt; p b -&gt; p b
+forall (p :: * -&gt; *) a b c.
+ExtAlternative p =&gt;
+String -&gt; p a -&gt; p b -&gt; c -&gt; c
+</span><span class="hs-identifier hs-var">must_be_non_empties</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;pFoldr2Sep&quot;</span></span><span> </span><span class="annot"><span class="annottext">p a1
+</span><a href="#local-6989586621679059428"><span class="hs-identifier hs-var">sep</span></a></span><span> </span><span class="annot"><span class="annottext">p a
+</span><a href="#local-6989586621679059427"><span class="hs-identifier hs-var">p</span></a></span><span> </span><span class="annot"><span class="annottext">p b
+</span><a href="#local-6989586621679059425"><span class="hs-identifier hs-var">pfm</span></a></span><span>
+</span><span id="line-64"></span><span>  </span><span class="hs-keyword">where</span><span> </span><span id="local-6989586621679059425"><span class="annot"><span class="annottext">pfm :: p b
+</span><a href="#local-6989586621679059425"><span class="hs-identifier hs-var hs-var">pfm</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; b -&gt; b
+</span><a href="#local-6989586621679059430"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="annot"><span class="annottext">(a -&gt; b -&gt; b) -&gt; p a -&gt; p (b -&gt; b)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">p a
+</span><a href="#local-6989586621679059427"><span class="hs-identifier hs-var">p</span></a></span><span> </span><span class="annot"><span class="annottext">p (b -&gt; b) -&gt; p b -&gt; p b
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">(a -&gt; b -&gt; b, b) -&gt; p a -&gt; p b
+forall (p :: * -&gt; *) v b.
+IsParser p =&gt;
+(v -&gt; b -&gt; b, b) -&gt; p v -&gt; p b
+</span><span class="hs-identifier hs-var">pFoldr1</span></span><span> </span><span class="annot"><span class="annottext">(a -&gt; b -&gt; b, b)
+</span><a href="#local-6989586621679059431"><span class="hs-identifier hs-var">alg</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">p a1
+</span><a href="#local-6989586621679059428"><span class="hs-identifier hs-var">sep</span></a></span><span> </span><span class="annot"><span class="annottext">p a1 -&gt; p a -&gt; p a
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f a -&gt; f b -&gt; f b
+</span><span class="hs-operator hs-var">*&gt;</span></span><span> </span><span class="annot"><span class="annottext">p a
+</span><a href="#local-6989586621679059427"><span class="hs-identifier hs-var">p</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-65"></span><span>
+</span><span id="line-66"></span><span id="local-6989586621679059421"><span id="local-6989586621679059422"><span id="local-6989586621679059423"><span class="annot"><a href="Parsing.html#pList2Sep"><span class="hs-identifier hs-type">pList2Sep</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IsParser</span></span><span> </span><span class="annot"><a href="#local-6989586621679059423"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059423"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679059422"><span class="hs-identifier hs-type">a1</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059423"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679059421"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679059423"><span class="hs-identifier hs-type">p</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679059421"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span></span></span></span><span>
+</span><span id="line-67"></span><span id="pList2Sep"><span class="annot"><span class="annottext">pList2Sep :: p a1 -&gt; p a -&gt; p [a]
+</span><a href="Parsing.html#pList2Sep"><span class="hs-identifier hs-var hs-var">pList2Sep</span></a></span></span><span> </span><span id="local-6989586621679059419"><span class="annot"><span class="annottext">p a1
+</span><a href="#local-6989586621679059419"><span class="hs-identifier hs-var">s</span></a></span></span><span> </span><span id="local-6989586621679059418"><span class="annot"><span class="annottext">p a
+</span><a href="#local-6989586621679059418"><span class="hs-identifier hs-var">p</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; p a1 -&gt; p a -&gt; p [a] -&gt; p [a]
+forall (p :: * -&gt; *) a b c.
+ExtAlternative p =&gt;
+String -&gt; p a -&gt; p b -&gt; c -&gt; c
+</span><span class="hs-identifier hs-var">must_be_non_empties</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;pListSep&quot;</span></span><span> </span><span class="annot"><span class="annottext">p a1
+</span><a href="#local-6989586621679059419"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">p a
+</span><a href="#local-6989586621679059418"><span class="hs-identifier hs-var">p</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a -&gt; [a] -&gt; [a], [a]) -&gt; p a1 -&gt; p a -&gt; p [a]
+forall (p :: * -&gt; *) a b a1.
+IsParser p =&gt;
+(a -&gt; b -&gt; b, b) -&gt; p a1 -&gt; p a -&gt; p b
+</span><a href="Parsing.html#pFoldr2Sep"><span class="hs-identifier hs-var">pFoldr2Sep</span></a></span><span> </span><span class="annot"><span class="annottext">(a -&gt; [a] -&gt; [a], [a])
+forall a a1. (a -&gt; [a] -&gt; [a], [a1])
+</span><span class="hs-identifier hs-var">list_alg</span></span><span> </span><span class="annot"><span class="annottext">p a1
+</span><a href="#local-6989586621679059419"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">p a
+</span><a href="#local-6989586621679059418"><span class="hs-identifier hs-var">p</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-68"></span></pre></body></html>

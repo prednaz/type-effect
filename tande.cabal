@@ -27,9 +27,9 @@ library
   exposed-modules:
       Ast
       Parsing
+      Pretty
       Show
       Type
-      Pretty
   other-modules:
       Paths_tande
   hs-source-dirs:

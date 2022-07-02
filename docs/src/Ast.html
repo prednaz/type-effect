@@ -1,0 +1,350 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Ast</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-2"></span><span>
+</span><span id="line-3"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.State.Lazy</span></span><span>
+</span><span id="line-4"></span><span>
+</span><span id="line-5"></span><span class="hs-keyword">data</span><span> </span><span id="Op"><span class="annot"><a href="Ast.html#Op"><span class="hs-identifier hs-var">Op</span></a></span></span><span>
+</span><span id="line-6"></span><span>  </span><span class="hs-glyph">=</span><span> </span><span id="Add"><span class="annot"><a href="Ast.html#Add"><span class="hs-identifier hs-var">Add</span></a></span></span><span> </span><span class="hs-glyph">|</span><span> </span><span id="Sub"><span class="annot"><a href="Ast.html#Sub"><span class="hs-identifier hs-var">Sub</span></a></span></span><span> </span><span class="hs-glyph">|</span><span> </span><span id="Mul"><span class="annot"><a href="Ast.html#Mul"><span class="hs-identifier hs-var">Mul</span></a></span></span><span> </span><span class="hs-glyph">|</span><span> </span><span id="Div"><span class="annot"><a href="Ast.html#Div"><span class="hs-identifier hs-var">Div</span></a></span></span><span>
+</span><span id="line-7"></span><span>  </span><span class="hs-keyword">deriving</span><span> </span><span id="local-6989586621679059377"><span id="local-6989586621679059379"><span class="annot"><span class="annottext">Op -&gt; Op -&gt; Bool
+(Op -&gt; Op -&gt; Bool) -&gt; (Op -&gt; Op -&gt; Bool) -&gt; Eq Op
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Op -&gt; Op -&gt; Bool
+$c/= :: Op -&gt; Op -&gt; Bool
+== :: Op -&gt; Op -&gt; Bool
+$c== :: Op -&gt; Op -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span>
+</span><span id="line-8"></span><span>
+</span><span id="line-9"></span><span class="hs-keyword">type</span><span> </span><span id="Pi"><span class="annot"><a href="Ast.html#Pi"><span class="hs-identifier hs-var">Pi</span></a></span></span><span>    </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span> </span><span class="hs-comment">-- For numbering lambda's etc. that can then be tracked in the analysis</span><span>
+</span><span id="line-10"></span><span class="hs-keyword">type</span><span> </span><span id="Name"><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-var">Name</span></a></span></span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>  </span><span class="hs-comment">-- For identifier names</span><span>
+</span><span id="line-11"></span><span>
+</span><span id="line-12"></span><span class="hs-keyword">data</span><span> </span><span id="Expr"><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-var">Expr</span></a></span></span><span>
+</span><span id="line-13"></span><span>  </span><span class="hs-glyph">=</span><span> </span><span id="Integer"><span class="annot"><a href="Ast.html#Integer"><span class="hs-identifier hs-var">Integer</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span>
+</span><span id="line-14"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Bool"><span class="annot"><a href="Ast.html#Bool"><span class="hs-identifier hs-var">Bool</span></a></span></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-15"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Var"><span class="annot"><a href="Ast.html#Var"><span class="hs-identifier hs-var">Var</span></a></span></span><span>     </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span>
+</span><span id="line-16"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Fn"><span class="annot"><a href="Ast.html#Fn"><span class="hs-identifier hs-var">Fn</span></a></span></span><span>      </span><span class="annot"><a href="Ast.html#Pi"><span class="hs-identifier hs-type">Pi</span></a></span><span>   </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-17"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Fun"><span class="annot"><a href="Ast.html#Fun"><span class="hs-identifier hs-var">Fun</span></a></span></span><span>     </span><span class="annot"><a href="Ast.html#Pi"><span class="hs-identifier hs-type">Pi</span></a></span><span>   </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-18"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="App"><span class="annot"><a href="Ast.html#App"><span class="hs-identifier hs-var">App</span></a></span></span><span>     </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-19"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Let"><span class="annot"><a href="Ast.html#Let"><span class="hs-identifier hs-var">Let</span></a></span></span><span>     </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-20"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="ITE"><span class="annot"><a href="Ast.html#ITE"><span class="hs-identifier hs-var">ITE</span></a></span></span><span>     </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-21"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Oper"><span class="annot"><a href="Ast.html#Oper"><span class="hs-identifier hs-var">Oper</span></a></span></span><span>    </span><span class="annot"><a href="Ast.html#Op"><span class="hs-identifier hs-type">Op</span></a></span><span>   </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-22"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Pair"><span class="annot"><a href="Ast.html#Pair"><span class="hs-identifier hs-var">Pair</span></a></span></span><span>    </span><span class="annot"><a href="Ast.html#Pi"><span class="hs-identifier hs-type">Pi</span></a></span><span>   </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-23"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="PCase"><span class="annot"><a href="Ast.html#PCase"><span class="hs-identifier hs-var">PCase</span></a></span></span><span>   </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-24"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Cons"><span class="annot"><a href="Ast.html#Cons"><span class="hs-identifier hs-var">Cons</span></a></span></span><span>    </span><span class="annot"><a href="Ast.html#Pi"><span class="hs-identifier hs-type">Pi</span></a></span><span>   </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-25"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="Nil"><span class="annot"><a href="Ast.html#Nil"><span class="hs-identifier hs-var">Nil</span></a></span></span><span>     </span><span class="annot"><a href="Ast.html#Pi"><span class="hs-identifier hs-type">Pi</span></a></span><span>
+</span><span id="line-26"></span><span>  </span><span class="hs-glyph">|</span><span> </span><span id="LCase"><span class="annot"><a href="Ast.html#LCase"><span class="hs-identifier hs-var">LCase</span></a></span></span><span>   </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-27"></span><span>  </span><span class="hs-keyword">deriving</span><span> </span><span id="local-6989586621679059356"><span id="local-6989586621679059358"><span class="annot"><span class="annottext">Expr -&gt; Expr -&gt; Bool
+(Expr -&gt; Expr -&gt; Bool) -&gt; (Expr -&gt; Expr -&gt; Bool) -&gt; Eq Expr
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Expr -&gt; Expr -&gt; Bool
+$c/= :: Expr -&gt; Expr -&gt; Bool
+== :: Expr -&gt; Expr -&gt; Bool
+$c== :: Expr -&gt; Expr -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span>
+</span><span id="line-28"></span><span>
+</span><span id="line-29"></span><span>
+</span><span id="line-30"></span><span class="annot"><a href="Ast.html#bin"><span class="hs-identifier hs-type">bin</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Ast.html#Name"><span class="hs-identifier hs-type">Name</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-31"></span><span id="bin"><span class="annot"><span class="annottext">bin :: Name -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#bin"><span class="hs-identifier hs-var hs-var">bin</span></a></span></span><span> </span><span id="local-6989586621679059354"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059354"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Oper"><span class="hs-identifier hs-var">Oper</span></a></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="#local-6989586621679059353"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-32"></span><span>  </span><span id="local-6989586621679059353"><span class="annot"><span class="annottext">r :: Op
+</span><a href="#local-6989586621679059353"><span class="hs-identifier hs-var hs-var">r</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059354"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-33"></span><span>        </span><span class="annot"><span class="annottext">Name
+</span><span class="hs-string">&quot;+&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="Ast.html#Add"><span class="hs-identifier hs-var">Add</span></a></span><span>
+</span><span id="line-34"></span><span>        </span><span class="annot"><span class="annottext">Name
+</span><span class="hs-string">&quot;-&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="Ast.html#Sub"><span class="hs-identifier hs-var">Sub</span></a></span><span>
+</span><span id="line-35"></span><span>        </span><span class="annot"><span class="annottext">Name
+</span><span class="hs-string">&quot;*&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="Ast.html#Mul"><span class="hs-identifier hs-var">Mul</span></a></span><span>
+</span><span id="line-36"></span><span>        </span><span class="annot"><span class="annottext">Name
+</span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="Ast.html#Div"><span class="hs-identifier hs-var">Div</span></a></span><span>
+</span><span id="line-37"></span><span>        </span><span class="annot"><span class="annottext">Name
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Name -&gt; Op
+forall a. HasCallStack =&gt; Name -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Name
+</span><span class="hs-string">&quot;unexpected operator: &quot;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; Name -&gt; Name
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059354"><span class="hs-identifier hs-var">op</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-38"></span><span>
+</span><span id="line-39"></span><span class="hs-keyword">type</span><span> </span><span id="LabelM"><span class="annot"><a href="Ast.html#LabelM"><span class="hs-identifier hs-var">LabelM</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">State</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span>
+</span><span id="line-40"></span><span>
+</span><span id="line-41"></span><span class="annot"><a href="Ast.html#assignLabels"><span class="hs-identifier hs-type">assignLabels</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-42"></span><span id="assignLabels"><span class="annot"><span class="annottext">assignLabels :: Expr -&gt; Expr
+</span><a href="Ast.html#assignLabels"><span class="hs-identifier hs-var hs-var">assignLabels</span></a></span></span><span> </span><span id="local-6989586621679059349"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059349"><span class="hs-identifier hs-var">e</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">State Integer Expr -&gt; Integer -&gt; Expr
+forall s a. State s a -&gt; s -&gt; a
+</span><span class="hs-identifier hs-var">evalState</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059349"><span class="hs-identifier hs-var">e</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">1</span></span><span>
+</span><span id="line-43"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-44"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-type">go</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Ast.html#LabelM"><span class="hs-identifier hs-type">LabelM</span></a></span><span> </span><span class="annot"><a href="Ast.html#Expr"><span class="hs-identifier hs-type">Expr</span></a></span><span>
+</span><span id="line-45"></span><span>    </span><span id="local-6989586621679059347"><span class="annot"><span class="annottext">go :: Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var hs-var">go</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#App"><span class="hs-identifier hs-type">App</span></a></span><span> </span><span id="local-6989586621679059346"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059346"><span class="hs-identifier hs-var">e1</span></a></span></span><span> </span><span id="local-6989586621679059345"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059345"><span class="hs-identifier hs-var">e2</span></a></span></span><span class="hs-special">)</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#App"><span class="hs-identifier hs-var">App</span></a></span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059346"><span class="hs-identifier hs-var">e1</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059345"><span class="hs-identifier hs-var">e2</span></a></span><span>
+</span><span id="line-46"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#Let"><span class="hs-identifier hs-type">Let</span></a></span><span> </span><span id="local-6989586621679059343"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059343"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span id="local-6989586621679059342"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059342"><span class="hs-identifier hs-var">e1</span></a></span></span><span> </span><span id="local-6989586621679059341"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059341"><span class="hs-identifier hs-var">e2</span></a></span></span><span class="hs-special">)</span><span>   </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Name -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Let"><span class="hs-identifier hs-var">Let</span></a></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059343"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059342"><span class="hs-identifier hs-var">e1</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059341"><span class="hs-identifier hs-var">e2</span></a></span><span>
+</span><span id="line-47"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#ITE"><span class="hs-identifier hs-type">ITE</span></a></span><span> </span><span id="local-6989586621679059340"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059340"><span class="hs-identifier hs-var">c</span></a></span></span><span> </span><span id="local-6989586621679059339"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059339"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679059338"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059338"><span class="hs-identifier hs-var">f</span></a></span></span><span class="hs-special">)</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Expr -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#ITE"><span class="hs-identifier hs-var">ITE</span></a></span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr
+-&gt; StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059340"><span class="hs-identifier hs-var">c</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059339"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059338"><span class="hs-identifier hs-var">f</span></a></span><span>
+</span><span id="line-48"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#Oper"><span class="hs-identifier hs-type">Oper</span></a></span><span> </span><span id="local-6989586621679059337"><span class="annot"><span class="annottext">Op
+</span><a href="#local-6989586621679059337"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span id="local-6989586621679059336"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059336"><span class="hs-identifier hs-var">e1</span></a></span></span><span> </span><span id="local-6989586621679059335"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059335"><span class="hs-identifier hs-var">e2</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Oper"><span class="hs-identifier hs-var">Oper</span></a></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="#local-6989586621679059337"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059336"><span class="hs-identifier hs-var">e1</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059335"><span class="hs-identifier hs-var">e2</span></a></span><span>
+</span><span id="line-49"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#Fn"><span class="hs-identifier hs-type">Fn</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679059334"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059334"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span id="local-6989586621679059333"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059333"><span class="hs-identifier hs-var">e'</span></a></span></span><span class="hs-special">)</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Name -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Fn"><span class="hs-identifier hs-var">Fn</span></a></span><span> </span><span class="annot"><span class="annottext">(Integer -&gt; Name -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Integer
+-&gt; StateT Integer Identity (Name -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity Integer
+</span><a href="#local-6989586621679059332"><span class="hs-identifier hs-var">fresh</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Name -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Name
+-&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; StateT Integer Identity Name
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059334"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059333"><span class="hs-identifier hs-var">e'</span></a></span><span>
+</span><span id="line-50"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#Fun"><span class="hs-identifier hs-type">Fun</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679059331"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059331"><span class="hs-identifier hs-var">fn</span></a></span></span><span> </span><span id="local-6989586621679059330"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059330"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span id="local-6989586621679059329"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059329"><span class="hs-identifier hs-var">e'</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Name -&gt; Name -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Fun"><span class="hs-identifier hs-var">Fun</span></a></span><span> </span><span class="annot"><span class="annottext">(Integer -&gt; Name -&gt; Name -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Integer
+-&gt; StateT Integer Identity (Name -&gt; Name -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity Integer
+</span><a href="#local-6989586621679059332"><span class="hs-identifier hs-var">fresh</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Name -&gt; Name -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Name
+-&gt; StateT Integer Identity (Name -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; StateT Integer Identity Name
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059331"><span class="hs-identifier hs-var">fn</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Name -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Name
+-&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; StateT Integer Identity Name
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059330"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059329"><span class="hs-identifier hs-var">e'</span></a></span><span>
+</span><span id="line-51"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#Pair"><span class="hs-identifier hs-type">Pair</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679059328"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059328"><span class="hs-identifier hs-var">e1</span></a></span></span><span> </span><span id="local-6989586621679059327"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059327"><span class="hs-identifier hs-var">e2</span></a></span></span><span class="hs-special">)</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Pair"><span class="hs-identifier hs-var">Pair</span></a></span><span> </span><span class="annot"><span class="annottext">(Integer -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Integer
+-&gt; StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity Integer
+</span><a href="#local-6989586621679059332"><span class="hs-identifier hs-var">fresh</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059328"><span class="hs-identifier hs-var">e1</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059327"><span class="hs-identifier hs-var">e2</span></a></span><span>
+</span><span id="line-52"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#PCase"><span class="hs-identifier hs-type">PCase</span></a></span><span> </span><span id="local-6989586621679059326"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059326"><span class="hs-identifier hs-var">e1</span></a></span></span><span> </span><span id="local-6989586621679059325"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059325"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679059324"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059324"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span id="local-6989586621679059323"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059323"><span class="hs-identifier hs-var">e2</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Expr -&gt; Name -&gt; Name -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#PCase"><span class="hs-identifier hs-var">PCase</span></a></span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Name -&gt; Name -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr
+-&gt; StateT Integer Identity (Name -&gt; Name -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059326"><span class="hs-identifier hs-var">e1</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Name -&gt; Name -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Name
+-&gt; StateT Integer Identity (Name -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; StateT Integer Identity Name
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059325"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Name -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Name
+-&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; StateT Integer Identity Name
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059324"><span class="hs-identifier hs-var">y</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059323"><span class="hs-identifier hs-var">e2</span></a></span><span>
+</span><span id="line-53"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#Cons"><span class="hs-identifier hs-type">Cons</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679059322"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059322"><span class="hs-identifier hs-var">e1</span></a></span></span><span> </span><span id="local-6989586621679059321"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059321"><span class="hs-identifier hs-var">e2</span></a></span></span><span class="hs-special">)</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#Cons"><span class="hs-identifier hs-var">Cons</span></a></span><span> </span><span class="annot"><span class="annottext">(Integer -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Integer
+-&gt; StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity Integer
+</span><a href="#local-6989586621679059332"><span class="hs-identifier hs-var">fresh</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059322"><span class="hs-identifier hs-var">e1</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059321"><span class="hs-identifier hs-var">e2</span></a></span><span>
+</span><span id="line-54"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#LCase"><span class="hs-identifier hs-type">LCase</span></a></span><span> </span><span id="local-6989586621679059320"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059320"><span class="hs-identifier hs-var">e1</span></a></span></span><span> </span><span id="local-6989586621679059319"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059319"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679059318"><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059318"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span id="local-6989586621679059317"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059317"><span class="hs-identifier hs-var">e2</span></a></span></span><span> </span><span id="local-6989586621679059316"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059316"><span class="hs-identifier hs-var">e3</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Expr -&gt; Name -&gt; Name -&gt; Expr -&gt; Expr -&gt; Expr
+</span><a href="Ast.html#LCase"><span class="hs-identifier hs-var">LCase</span></a></span><span> </span><span class="annot"><span class="annottext">(Expr -&gt; Name -&gt; Name -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr
+-&gt; StateT Integer Identity (Name -&gt; Name -&gt; Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059320"><span class="hs-identifier hs-var">e1</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Name -&gt; Name -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Name
+-&gt; StateT Integer Identity (Name -&gt; Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; StateT Integer Identity Name
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059319"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Name -&gt; Expr -&gt; Expr -&gt; Expr)
+-&gt; StateT Integer Identity Name
+-&gt; StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Name -&gt; StateT Integer Identity Name
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Name
+</span><a href="#local-6989586621679059318"><span class="hs-identifier hs-var">y</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; StateT Integer Identity (Expr -&gt; Expr)
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059317"><span class="hs-identifier hs-var">e2</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity (Expr -&gt; Expr)
+-&gt; State Integer Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;*&gt;</span></span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+</span><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059316"><span class="hs-identifier hs-var">e3</span></a></span><span>
+</span><span id="line-55"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Ast.html#Nil"><span class="hs-identifier hs-type">Nil</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Expr
+</span><a href="Ast.html#Nil"><span class="hs-identifier hs-var">Nil</span></a></span><span> </span><span class="annot"><span class="annottext">(Integer -&gt; Expr)
+-&gt; StateT Integer Identity Integer -&gt; State Integer Expr
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity Integer
+</span><a href="#local-6989586621679059332"><span class="hs-identifier hs-var">fresh</span></a></span><span>
+</span><span id="line-56"></span><span>    </span><span class="annot"><a href="#local-6989586621679059347"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span id="local-6989586621679059315"><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059315"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Expr -&gt; State Integer Expr
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Expr
+</span><a href="#local-6989586621679059315"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-57"></span><span>
+</span><span id="line-58"></span><span>    </span><span class="annot"><a href="#local-6989586621679059332"><span class="hs-identifier hs-type">fresh</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Ast.html#LabelM"><span class="hs-identifier hs-type">LabelM</span></a></span><span> </span><span class="annot"><a href="Ast.html#Pi"><span class="hs-identifier hs-type">Pi</span></a></span><span>
+</span><span id="line-59"></span><span>    </span><span id="local-6989586621679059332"><span class="annot"><span class="annottext">fresh :: StateT Integer Identity Integer
+</span><a href="#local-6989586621679059332"><span class="hs-identifier hs-var hs-var">fresh</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity Integer
+forall s (m :: * -&gt; *). MonadState s m =&gt; m s
+</span><span class="hs-identifier hs-var">get</span></span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity Integer
+-&gt; (Integer -&gt; StateT Integer Identity Integer)
+-&gt; StateT Integer Identity Integer
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679059313"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679059313"><span class="hs-identifier hs-var">s</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Integer -&gt; Integer) -&gt; StateT Integer Identity ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; (s -&gt; s) -&gt; m ()
+</span><span class="hs-identifier hs-var">modify</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; Integer -&gt; Integer
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">1</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">StateT Integer Identity ()
+-&gt; StateT Integer Identity Integer
+-&gt; StateT Integer Identity Integer
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; m b -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Integer -&gt; StateT Integer Identity Integer
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679059313"><span class="hs-identifier hs-var">s</span></a></span><span>
+</span><span id="line-60"></span></pre></body></html>

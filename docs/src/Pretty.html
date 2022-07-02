@@ -1,0 +1,293 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE FlexibleInstances #-}</span><span>
+</span><span id="line-2"></span><span>
+</span><span id="line-3"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Pretty</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-4"></span><span>
+</span><span id="line-5"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Type.html"><span class="hs-identifier">Type</span></a></span><span>
+</span><span id="line-6"></span><span>    </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="Type.html#Ty"><span class="hs-identifier">Ty</span></a></span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Type.html#TyScheme"><span class="hs-identifier">TyScheme</span></a></span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Type.html#TyVar"><span class="hs-identifier">TyVar</span></a></span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Type.html#AnnVar"><span class="hs-identifier">AnnVar</span></a></span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Type.html#Ann"><span class="hs-identifier">Ann</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Type.html#FunId"><span class="hs-identifier">FunId</span></a></span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-7"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Show.html"><span class="hs-identifier">Show</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Show.html#showLabel"><span class="hs-identifier">showLabel</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-8"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.List</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">intercalate</span></span><span class="hs-special">)</span><span>
+</span><span id="line-9"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Foldable</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Foldable</span></span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">toList</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-10"></span><span>
+</span><span id="line-11"></span><span id="local-6989586621679060595"><span class="annot"><a href="Pretty.html#pretty"><span class="hs-identifier hs-type">pretty</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679060595"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679060595"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span></span><span>
+</span><span id="line-12"></span><span id="pretty"><span class="annot"><span class="annottext">pretty :: a -&gt; String
+</span><a href="Pretty.html#pretty"><span class="hs-identifier hs-var hs-var">pretty</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-13"></span><span>
+</span><span id="line-14"></span><span class="hs-comment">-- | The @Pretty@ class implements pretty printing for annotated types.</span><span>
+</span><span id="line-15"></span><span class="hs-comment">-- These can be read as ordinary Haskell types with annotations.</span><span>
+</span><span id="line-16"></span><span class="hs-comment">-- The annotated type @x :: a &amp; b@ indicates that evaluating @x@ may call all functions at program points in the set @b@.</span><span>
+</span><span id="line-17"></span><span class="hs-comment">-- In the arrow type @f :: t1 -a;b-&gt;@, the @a@ annotation is the set of locations @f@ may have been defined,</span><span>
+</span><span id="line-18"></span><span class="hs-comment">-- while @b@ is the set of functions that may be called when applying @f@.</span><span>
+</span><span id="line-19"></span><span class="hs-comment">-- The annotation @a@ in the tuple type @pair a(t1, t2)@ and in the list type @t list a@ represent the sets of locations the tuple or list may have been created.</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">class</span><span> </span><span id="Pretty"><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-var">Pretty</span></a></span></span><span> </span><span id="local-6989586621679060615"><span class="annot"><a href="#local-6989586621679060615"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-21"></span><span>  </span><span id="pretty%27"><span class="annot"><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-type">pretty'</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679060615"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>
+</span><span id="line-22"></span><span>
+</span><span id="line-23"></span><span id="local-6989586621679060589"><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679060589"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#TyScheme"><span class="hs-identifier hs-type">TyScheme</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679060589"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-24"></span><span>  </span><span id="local-6989586621679060586"><span class="annot"><span class="annottext">pretty' :: Bool -&gt; TyScheme a -&gt; String
+</span><a href="#local-6989586621679060586"><span class="hs-identifier hs-var hs-var hs-var hs-var">pretty'</span></a></span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#SType"><span class="hs-identifier hs-type">SType</span></a></span><span> </span><span id="local-6989586621679060584"><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060584"><span class="hs-identifier hs-var">t</span></a></span></span><span class="hs-special">)</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Ty a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060584"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><span id="line-25"></span><span>  </span><span class="annot"><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span id="local-6989586621679060583"><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679060583"><span class="hs-identifier hs-var">b</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#Forall"><span class="hs-identifier hs-type">Forall</span></a></span><span> </span><span id="local-6989586621679060581"><span class="annot"><span class="annottext">TyVar
+</span><a href="#local-6989586621679060581"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679060580"><span class="annot"><span class="annottext">TyScheme a
+</span><a href="#local-6989586621679060580"><span class="hs-identifier hs-var">ts</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679060583"><span class="hs-identifier hs-var">b</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679060579"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679060579"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-26"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-27"></span><span>      </span><span id="local-6989586621679060579"><span class="annot"><span class="annottext">x :: String
+</span><a href="#local-6989586621679060579"><span class="hs-identifier hs-var hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;forall &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; TyVar -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">TyVar
+</span><a href="#local-6989586621679060581"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">TyScheme a -&gt; String
+forall a. Pretty a =&gt; TyScheme a -&gt; String
+</span><a href="Pretty.html#prettyTS"><span class="hs-identifier hs-var">prettyTS</span></a></span><span> </span><span class="annot"><span class="annottext">TyScheme a
+</span><a href="#local-6989586621679060580"><span class="hs-identifier hs-var">ts</span></a></span></span><span>
+</span><span id="line-28"></span><span>
+</span><span id="line-29"></span><span id="local-6989586621679060608"><span class="annot"><a href="Pretty.html#prettyTS"><span class="hs-identifier hs-type">prettyTS</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679060608"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Type.html#TyScheme"><span class="hs-identifier hs-type">TyScheme</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679060608"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span></span><span>
+</span><span id="line-30"></span><span id="prettyTS"><span class="annot"><span class="annottext">prettyTS :: TyScheme a -&gt; String
+</span><a href="Pretty.html#prettyTS"><span class="hs-identifier hs-var hs-var">prettyTS</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#SType"><span class="hs-identifier hs-type">SType</span></a></span><span> </span><span id="local-6989586621679060577"><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060577"><span class="hs-identifier hs-var">t</span></a></span></span><span class="hs-special">)</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Ty a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060577"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><span id="line-31"></span><span class="annot"><a href="Pretty.html#prettyTS"><span class="hs-identifier hs-var">prettyTS</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#Forall"><span class="hs-identifier hs-type">Forall</span></a></span><span> </span><span id="local-6989586621679060576"><span class="annot"><span class="annottext">TyVar
+</span><a href="#local-6989586621679060576"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679060575"><span class="annot"><span class="annottext">TyScheme a
+</span><a href="#local-6989586621679060575"><span class="hs-identifier hs-var">ts</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot; &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; TyVar -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">TyVar
+</span><a href="#local-6989586621679060576"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">TyScheme a -&gt; String
+forall a. Pretty a =&gt; TyScheme a -&gt; String
+</span><a href="Pretty.html#prettyTS"><span class="hs-identifier hs-var">prettyTS</span></a></span><span> </span><span class="annot"><span class="annottext">TyScheme a
+</span><a href="#local-6989586621679060575"><span class="hs-identifier hs-var">ts</span></a></span><span>
+</span><span id="line-32"></span><span>
+</span><span id="line-33"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="Type.html#TyVar"><span class="hs-identifier hs-type">TyVar</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-34"></span><span>  </span><span id="local-6989586621679060573"><span class="annot"><span class="annottext">pretty' :: Bool -&gt; TyVar -&gt; String
+</span><a href="#local-6989586621679060573"><span class="hs-identifier hs-var hs-var hs-var hs-var">pretty'</span></a></span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#TyVar"><span class="hs-identifier hs-type">TyVar</span></a></span><span> </span><span id="local-6989586621679060571"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679060571"><span class="hs-identifier hs-var">i</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;a&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Integer -&gt; String -&gt; String
+</span><a href="Show.html#showLabel"><span class="hs-identifier hs-var">showLabel</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679060571"><span class="hs-identifier hs-var">i</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;&quot;</span></span><span>
+</span><span id="line-35"></span><span>
+</span><span id="line-36"></span><span id="local-6989586621679060570"><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679060570"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#Ty"><span class="hs-identifier hs-type">Ty</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679060570"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-37"></span><span>  </span><span id="local-6989586621679060568"><span class="annot"><span class="annottext">pretty' :: Bool -&gt; Ty a -&gt; String
+</span><a href="#local-6989586621679060568"><span class="hs-identifier hs-var hs-var hs-var hs-var">pretty'</span></a></span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#FreeVar"><span class="hs-identifier hs-type">FreeVar</span></a></span><span> </span><span id="local-6989586621679060566"><span class="annot"><span class="annottext">TyVar
+</span><a href="#local-6989586621679060566"><span class="hs-identifier hs-var">v</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; TyVar -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">TyVar
+</span><a href="#local-6989586621679060566"><span class="hs-identifier hs-var">v</span></a></span><span>
+</span><span id="line-38"></span><span>  </span><span class="annot"><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="Type.html#TInt"><span class="hs-identifier hs-var">TInt</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Int&quot;</span></span><span>
+</span><span id="line-39"></span><span>  </span><span class="annot"><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="Type.html#TBool"><span class="hs-identifier hs-var">TBool</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Bool&quot;</span></span><span>
+</span><span id="line-40"></span><span>  </span><span class="annot"><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span id="local-6989586621679060563"><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679060563"><span class="hs-identifier hs-var">b</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#TArrow"><span class="hs-identifier hs-type">TArrow</span></a></span><span> </span><span id="local-6989586621679060561"><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060561"><span class="hs-identifier hs-var">t1</span></a></span></span><span> </span><span id="local-6989586621679060560"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060560"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span id="local-6989586621679060559"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060559"><span class="hs-identifier hs-var">a'</span></a></span></span><span> </span><span id="local-6989586621679060558"><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060558"><span class="hs-identifier hs-var">t2</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679060563"><span class="hs-identifier hs-var">b</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679060557"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679060557"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-41"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-42"></span><span>      </span><span id="local-6989586621679060557"><span class="annot"><span class="annottext">x :: String
+</span><a href="#local-6989586621679060557"><span class="hs-identifier hs-var hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>  </span><span class="annot"><span class="annottext">Bool -&gt; Ty a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060561"><span class="hs-identifier hs-var">t1</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot; -&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060560"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;;&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060559"><span class="hs-identifier hs-var">a'</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;-&gt; &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Ty a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060558"><span class="hs-identifier hs-var">t2</span></a></span><span>
+</span><span id="line-43"></span><span>  </span><span class="annot"><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#TPair"><span class="hs-identifier hs-type">TPair</span></a></span><span> </span><span id="local-6989586621679060555"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060555"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span id="local-6989586621679060554"><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060554"><span class="hs-identifier hs-var">t1</span></a></span></span><span> </span><span id="local-6989586621679060553"><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060553"><span class="hs-identifier hs-var">t2</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;pair&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060555"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Ty a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060554"><span class="hs-identifier hs-var">t1</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot; , &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Ty a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060553"><span class="hs-identifier hs-var">t2</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span>
+</span><span id="line-44"></span><span>  </span><span class="annot"><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span id="local-6989586621679060552"><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679060552"><span class="hs-identifier hs-var">b</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#TList"><span class="hs-identifier hs-type">TList</span></a></span><span> </span><span id="local-6989586621679060550"><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060550"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679060549"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060549"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679060552"><span class="hs-identifier hs-var">b</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679060548"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679060548"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-45"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-46"></span><span>      </span><span id="local-6989586621679060548"><span class="annot"><span class="annottext">x :: String
+</span><a href="#local-6989586621679060548"><span class="hs-identifier hs-var hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Ty a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="annot"><span class="annottext">Ty a
+</span><a href="#local-6989586621679060550"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot; list&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; a -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679060549"><span class="hs-identifier hs-var">a</span></a></span></span><span>
+</span><span id="line-47"></span><span>
+</span><span id="line-48"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="Type.html#FunId"><span class="hs-identifier hs-type">FunId</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-49"></span><span>  </span><span id="local-6989586621679060546"><span class="annot"><span class="annottext">pretty' :: Bool -&gt; FunId -&gt; String
+</span><a href="#local-6989586621679060546"><span class="hs-identifier hs-var hs-var hs-var hs-var">pretty'</span></a></span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#FunId"><span class="hs-identifier hs-type">FunId</span></a></span><span> </span><span id="local-6989586621679060544"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679060544"><span class="hs-identifier hs-var">n</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679060544"><span class="hs-identifier hs-var">n</span></a></span><span>
+</span><span id="line-50"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="Type.html#Ann"><span class="hs-identifier hs-type">Ann</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-51"></span><span>  </span><span id="local-6989586621679060541"><span class="annot"><span class="annottext">pretty' :: Bool -&gt; Ann -&gt; String
+</span><a href="#local-6989586621679060541"><span class="hs-identifier hs-var hs-var hs-var hs-var">pretty'</span></a></span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679060540"><span class="annot"><span class="annottext">Ann
+</span><a href="#local-6989586621679060540"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;{&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; [String] -&gt; String
+forall a. [a] -&gt; [[a]] -&gt; [a]
+</span><span class="hs-identifier hs-var">intercalate</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; FunId -&gt; String
+forall a. Pretty a =&gt; Bool -&gt; a -&gt; String
+</span><a href="Pretty.html#pretty%27"><span class="hs-identifier hs-var">pretty'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">(FunId -&gt; String) -&gt; [FunId] -&gt; [String]
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Ann -&gt; [FunId]
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; [a]
+</span><span class="hs-identifier hs-var">toList</span></span><span> </span><span class="annot"><span class="annottext">Ann
+</span><a href="#local-6989586621679060540"><span class="hs-identifier hs-var">a</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;}&quot;</span></span><span>
+</span><span id="line-52"></span><span>
+</span><span id="line-53"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="annot"><a href="Type.html#AnnVar"><span class="hs-identifier hs-type">AnnVar</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-54"></span><span>  </span><span id="local-6989586621679060537"><span class="annot"><span class="annottext">pretty' :: Bool -&gt; AnnVar -&gt; String
+</span><a href="#local-6989586621679060537"><span class="hs-identifier hs-var hs-var hs-var hs-var">pretty'</span></a></span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#AnnVar"><span class="hs-identifier hs-type">AnnVar</span></a></span><span> </span><span id="local-6989586621679060535"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679060535"><span class="hs-identifier hs-var">i</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;b&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Integer -&gt; String -&gt; String
+</span><a href="Show.html#showLabel"><span class="hs-identifier hs-var">showLabel</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679060535"><span class="hs-identifier hs-var">i</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;&quot;</span></span><span>
+</span><span id="line-55"></span><span>
+</span><span id="line-56"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Pretty.html#Pretty"><span class="hs-identifier hs-type">Pretty</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Type.html#TyScheme"><span class="hs-identifier hs-type">TyScheme</span></a></span><span> </span><span class="annot"><a href="Type.html#Ann"><span class="hs-identifier hs-type">Ann</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Type.html#Ann"><span class="hs-identifier hs-type">Ann</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-57"></span><span>  </span><span id="local-6989586621679060533"><span class="annot"><span class="annottext">pretty' :: Bool -&gt; (TyScheme Ann, Ann) -&gt; String
+</span><a href="#local-6989586621679060533"><span class="hs-identifier hs-var hs-var hs-var hs-var">pretty'</span></a></span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679060532"><span class="annot"><span class="annottext">TyScheme Ann
+</span><a href="#local-6989586621679060532"><span class="hs-identifier hs-var">t</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679060531"><span class="annot"><span class="annottext">Ann
+</span><a href="#local-6989586621679060531"><span class="hs-identifier hs-var">eff</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TyScheme Ann -&gt; String
+forall a. Pretty a =&gt; a -&gt; String
+</span><a href="Pretty.html#pretty"><span class="hs-identifier hs-var">pretty</span></a></span><span> </span><span class="annot"><span class="annottext">TyScheme Ann
+</span><a href="#local-6989586621679060532"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot; &amp; &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Ann -&gt; String
+forall a. Pretty a =&gt; a -&gt; String
+</span><a href="Pretty.html#pretty"><span class="hs-identifier hs-var">pretty</span></a></span><span> </span><span class="annot"><span class="annottext">Ann
+</span><a href="#local-6989586621679060531"><span class="hs-identifier hs-var">eff</span></a></span><span>
+</span><span id="line-58"></span></pre></body></html>
